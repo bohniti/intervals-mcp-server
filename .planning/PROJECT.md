@@ -107,4 +107,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-24 after initialization*
+*Last updated: 2026-04-24 — Phase 1 (Foundation and Write-Path Spike) complete: climbing utility layer in place (utils/climbing.py, utils/grades.py, formatter extension), live write endpoints confirmed against Intervals.icu (PUT /wellness upsert-safe, POST /activities/manual returns id, DELETE available for cleanup), verify_custom_fields_setup MCP tool shipped, README SETUP-01 section added.*
