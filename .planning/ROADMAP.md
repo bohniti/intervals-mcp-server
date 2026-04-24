@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 01-02-PLAN.md — Formatter extension (format_climbing_activity appended to utils/formatting.py)
 - [x] 01-03-PLAN.md — Spike script creation (scripts/spike_write_endpoints.py — live API probe)
 - [x] 01-04-PLAN.md — Run spike against live API + capture findings (checkpoint, manual cleanup)
-- [ ] 01-05-PLAN.md — verify_custom_fields_setup tool + server wiring + tool-layer tests
+- [x] 01-05-PLAN.md — verify_custom_fields_setup tool + server wiring + tool-layer tests
 - [ ] 01-06-PLAN.md — README "Climbing setup" section (SETUP-01 docs)
 **UI hint**: no
 
