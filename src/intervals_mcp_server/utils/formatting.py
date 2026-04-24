@@ -547,3 +547,46 @@ Cadence: Avg {group.get("average_cadence", 0)}, Max {group.get("max_cadence", 0)
 """
 
     return result
+
+
+def format_climbing_activity(activity: dict[str, Any]) -> str:
+    """Format a climbing activity (custom fields + RPE) into a readable string.
+
+    Renders only the fields Phase 1 establishes: discipline, indoor,
+    session_focus, top_grade_sent, top_grade_attempted, sends, attempts,
+    icu_rpe. Activities without these fields render mostly-N/A lines, which
+    is exactly what we want for a readback of a freshly-created activity
+    before enrichment.
+
+    Args:
+        activity: Dict shaped like an Intervals.icu activity JSON. Custom
+            fields are expected as top-level keys (matches the API shape).
+
+    Returns:
+        A formatted multi-line string.
+    """
+    indoor = activity.get("indoor")
+    if indoor is True:
+        indoor_str = "Yes"
+    elif indoor is False:
+        indoor_str = "No"
+    else:
+        indoor_str = "N/A"
+
+    rpe = activity.get("icu_rpe")
+    rpe_str = f"{rpe}/10" if isinstance(rpe, (int, float)) else "N/A"
+
+    return (
+        f"Climbing Activity\n"
+        f"  ID: {activity.get('id', 'N/A')}\n"
+        f"  Name: {activity.get('name', 'Unnamed')}\n"
+        f"  Date: {activity.get('start_date_local', 'Unknown')}\n"
+        f"  Discipline: {activity.get('discipline', 'N/A')}\n"
+        f"  Indoor: {indoor_str}\n"
+        f"  Session focus: {activity.get('session_focus', 'N/A')}\n"
+        f"  Top grade sent: {activity.get('top_grade_sent', 'N/A')}\n"
+        f"  Top grade attempted: {activity.get('top_grade_attempted', 'N/A')}\n"
+        f"  Sends: {activity.get('sends', 'N/A')}\n"
+        f"  Attempts: {activity.get('attempts', 'N/A')}\n"
+        f"  RPE: {rpe_str}\n"
+    )
