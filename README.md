@@ -72,6 +72,50 @@ Your athlete ID is typically visible in the URL when you're logged into Interval
 
 - `https://intervals.icu/athlete/i12345/...` where `i12345` is your athlete ID
 
+## Climbing setup — required Intervals.icu custom fields
+
+The climbing tools (added in Phase 2+ of the climbing training loop) write
+structured session data to Intervals.icu **custom activity fields**. Custom
+fields cannot be created via the API — you must define them yourself, **once**,
+in your Intervals.icu athlete settings, before the climbing tools will work.
+
+Create each of the following fields exactly as specified (`Key` is the field's
+internal name; `Type` is what you select in the Intervals.icu field editor;
+`Options` are the exact option strings you enter for `select`-type fields):
+
+| Key                   | Type    | Options                                                    |
+|-----------------------|---------|------------------------------------------------------------|
+| `discipline`          | select  | `bouldering`, `sport_lead`, `top_rope`, `trad`             |
+| `indoor`              | bool    | —                                                          |
+| `session_focus`       | select  | `power`, `endurance`, `technique`, `projecting`, `mileage` |
+| `top_grade_sent`      | text    | —                                                          |
+| `top_grade_attempted` | text    | —                                                          |
+| `sends`               | integer | —                                                          |
+| `attempts`            | integer | —                                                          |
+
+**Important:**
+- Option strings are **case-sensitive** — use lowercase_snake_case exactly as
+  listed (e.g. `sport_lead`, not `Sport Lead` or `SPORT_LEAD`). The climbing
+  tools compare option values with strict equality; a case or spacing mismatch
+  will be silently ignored by Intervals.icu and the tool will refuse to write.
+- `top_grade_sent` and `top_grade_attempted` are plain text fields. The
+  climbing tools validate grades against the session's declared discipline —
+  Font grades (uppercase, e.g. `6A`, `7B+`) for bouldering, French sport
+  grades (lowercase, e.g. `6a`, `7b+`) for sport lead / top-rope / trad.
+
+### Verifying the setup
+
+After creating the fields, verify they are all present by asking Claude to
+run the `verify_custom_fields_setup` MCP tool. It reports any missing fields
+by name:
+
+```
+verify_custom_fields_setup()
+```
+
+If any required field is missing, the climbing write tools (Phase 2+) will
+refuse to run against your account until the missing fields are added.
+
 ## Updating
 
 This project is actively developed, with new features and fixes added regularly. To stay up to date, follow these steps:
