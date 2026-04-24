@@ -92,6 +92,7 @@ from intervals_mcp_server.tools.custom_items import (  # pylint: disable=wrong-i
     get_custom_items,
     update_custom_item,
 )
+from intervals_mcp_server.tools.climbing import verify_custom_fields_setup  # pylint: disable=wrong-import-position  # noqa: E402
 
 # Re-export make_intervals_request and httpx_client for backward compatibility
 # pylint: disable=duplicate-code  # This __all__ list is intentionally similar to tools/__init__.py
@@ -115,6 +116,7 @@ __all__ = [
     "create_custom_item",
     "update_custom_item",
     "delete_custom_item",
+    "verify_custom_fields_setup",
 ]
 
 
