@@ -75,31 +75,31 @@ Populated during roadmap creation. Each v1 requirement maps to exactly one phase
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLIMB-01 | TBD | Pending |
-| CLIMB-02 | TBD | Pending |
-| CLIMB-03 | TBD | Pending |
-| CLIMB-04 | TBD | Pending |
-| CLIMB-05 | TBD | Pending |
-| CLIMB-06 | TBD | Pending |
-| CLIMB-07 | TBD | Pending |
-| CLIMB-08 | TBD | Pending |
-| CLIMB-09 | TBD | Pending |
-| CLIMB-10 | TBD | Pending |
-| WELL-01 | TBD | Pending |
-| WELL-02 | TBD | Pending |
-| WELL-03 | TBD | Pending |
-| STAT-01 | TBD | Pending |
-| STAT-02 | TBD | Pending |
-| STAT-03 | TBD | Pending |
-| STAT-04 | TBD | Pending |
-| SETUP-01 | TBD | Pending |
-| SETUP-02 | TBD | Pending |
+| CLIMB-01 | Phase 3 | Pending |
+| CLIMB-02 | Phase 3 | Pending |
+| CLIMB-03 | Phase 2 | Pending |
+| CLIMB-04 | Phase 2 | Pending |
+| CLIMB-05 | Phase 2 | Pending |
+| CLIMB-06 | Phase 2 | Pending |
+| CLIMB-07 | Phase 2 | Pending |
+| CLIMB-08 | Phase 1 | Pending |
+| CLIMB-09 | Phase 3 | Pending |
+| CLIMB-10 | Phase 2 | Pending |
+| WELL-01 | Phase 2 | Pending |
+| WELL-02 | Phase 2 | Pending |
+| WELL-03 | Phase 2 | Pending |
+| STAT-01 | Phase 4 | Pending |
+| STAT-02 | Phase 4 | Pending |
+| STAT-03 | Phase 4 | Pending |
+| STAT-04 | Phase 4 | Pending |
+| SETUP-01 | Phase 5 | Pending |
+| SETUP-02 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 19 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 19 ⚠️ *(resolved by roadmapper)*
+- Mapped to phases: 19
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-24*
-*Last updated: 2026-04-24 after initial definition*
+*Last updated: 2026-04-24 after roadmap creation — traceability table populated*
