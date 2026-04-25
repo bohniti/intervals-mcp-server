@@ -48,7 +48,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. User can call `enrich_activity_climbing` with an existing activity ID and climbing fields (discipline, grade, session focus, RPE); the native `icu_rpe` field is confirmed written by reading the activity back
   3. If the required custom field schemas are absent from the athlete account, the enrichment tool returns a named error listing the missing fields rather than silently succeeding
   4. A Font grade is rejected on a sport-route activity and a French-sport grade is rejected on a boulder activity with a clear error before any API call is made
-**Plans**: TBD
+**Plans**: 5 plans
+**Plan list**:
+- [ ] 02-01-PLAN.md — Phase 2 second-probe spike (resolves D-01a/b/c, locks PUT body shape, wellness ranges, icu_rpe path) — non-autonomous (D-05 review gate)
+- [ ] 02-02-PLAN.md — utils/wellness.py module (WELLNESS_RANGES, build_wellness_put_body, sleep_hours_to_secs) + test_wellness_write.py scaffolding
+- [ ] 02-03-PLAN.md — write_wellness_entry MCP tool (additive in tools/wellness.py) + WELL-01/02/03 unit tests
+- [ ] 02-04-PLAN.md — enrich_activity_climbing MCP tool (additive in tools/climbing.py) + CLIMB-03..07 / CLIMB-10 unit tests
+- [ ] 02-05-PLAN.md — format_climbing_activity post-enrichment regression tests + scripts/smoke_phase2.py end-to-end live test (D-25)
 **UI hint**: no
 
 ### Phase 3: Activity Creation and Session Completion
