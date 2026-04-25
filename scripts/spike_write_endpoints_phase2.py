@@ -89,19 +89,33 @@ CF_PAYLOAD: dict[str, Any] = {
 }
 
 # Wellness subjective fields probed for accepted range (D-01b).
-WELLNESS_SUBJECTIVE_FIELDS: list[str] = [
-    "fatigue",
-    "stress",
-    "motivation",
-    "mood",
-    "soreness",
-    "sleep_quality",
-]
+# Mapping: public param name (write_wellness_entry signature, D-06) ->
+# Intervals.icu API field name (lowercase or camelCase per API). The
+# Phase 1 wellness readback (01-SPIKE-FINDINGS.md) showed the API uses
+# `sleepQuality` (camelCase) — sending `sleep_quality` returns 422
+# "Unrecognized wellness field". Public name stays `sleep_quality` for
+# the human-friendly write_wellness_entry param; the spike maps it to
+# the camelCase API name when issuing PUTs.
+WELLNESS_FIELD_API_NAMES: dict[str, str] = {
+    "fatigue": "fatigue",
+    "stress": "stress",
+    "motivation": "motivation",
+    "mood": "mood",
+    "soreness": "soreness",
+    "sleep_quality": "sleepQuality",
+}
+WELLNESS_SUBJECTIVE_FIELDS: list[str] = list(WELLNESS_FIELD_API_NAMES.keys())
 
 # Probe values for each wellness subjective field. Covers both the 1-4
 # and 1-10 hypotheses without committing to either; whichever values
 # return 200 AND roundtrip define the real accepted range.
 WELLNESS_PROBE_VALUES: list[int] = list(range(1, 11))  # 1..10 inclusive
+
+# Inter-request pacing (seconds). Intervals.icu rate-limits aggressive
+# probing — Phase 2 first run hit 429 around 100 requests in flight.
+# 0.4s/req keeps us well under any reasonable per-second cap. Total
+# wall-clock for ~80 probe requests stays under a minute.
+REQUEST_PAUSE_SECS: float = 0.4
 
 
 def _redact(obj: Any, athlete_id: str) -> Any:
@@ -136,6 +150,19 @@ def _wellness_readback_value(result: Any, field: str) -> Any:
     if isinstance(result, dict) and not _is_error(result):
         return result.get(field)
     return None
+
+
+async def _paced_request(**kwargs: Any) -> Any:
+    """make_intervals_request wrapper that sleeps after each call.
+
+    Avoids tripping Intervals.icu rate limits during the spike's high-
+    volume probing (~80+ wellness PUTs + ~16 activity attempts). The
+    sleep is post-call so callers see the response immediately and the
+    pause amortises into the next iteration's wall-clock.
+    """
+    result = await make_intervals_request(**kwargs)
+    await asyncio.sleep(REQUEST_PAUSE_SECS)
+    return result
 
 
 async def spike_activity_custom_field_put_shapes(athlete_id: str) -> dict[str, Any]:
@@ -173,7 +200,7 @@ async def spike_activity_custom_field_put_shapes(athlete_id: str) -> dict[str, A
     create_url = f"/athlete/{athlete_id}/activities/manual"
     findings["create_body_sent"] = create_body
     findings["create_endpoint_template"] = create_url.replace(athlete_id, ATHLETE_REDACTED)
-    create_resp = await make_intervals_request(
+    create_resp = await _paced_request(
         url=create_url,
         data=create_body,
         method="POST",
@@ -215,8 +242,8 @@ async def spike_activity_custom_field_put_shapes(athlete_id: str) -> dict[str, A
         if found_winner:
             break
         for endpoint_label, method, url in endpoint_variants:
-            write_resp = await make_intervals_request(url=url, data=body, method=method)
-            readback_resp = await make_intervals_request(url=f"/activity/{activity_id}")
+            write_resp = await _paced_request(url=url, data=body, method=method)
+            readback_resp = await _paced_request(url=f"/activity/{activity_id}")
             readback_dict = _normalize_readback(readback_resp)
 
             partial_match_keys: list[str] = []
@@ -282,9 +309,9 @@ async def spike_activity_custom_field_put_shapes(athlete_id: str) -> dict[str, A
         co_url = co_url_template.replace(ATHLETE_REDACTED, athlete_id).replace(
             "{activity_id}", str(activity_id)
         )
-        co_write = await make_intervals_request(url=co_url, data=co_body, method=co_method)
+        co_write = await _paced_request(url=co_url, data=co_body, method=co_method)
         co_readback = _normalize_readback(
-            await make_intervals_request(url=f"/activity/{activity_id}")
+            await _paced_request(url=f"/activity/{activity_id}")
         )
         co_rpe = co_readback.get("icu_rpe") if co_readback else None
         co_attempt = {
@@ -310,11 +337,11 @@ async def spike_activity_custom_field_put_shapes(athlete_id: str) -> dict[str, A
             ),
         ]
         for label, method, url in isolated_variants:
-            iso_write = await make_intervals_request(
+            iso_write = await _paced_request(
                 url=url, data={"icu_rpe": 6}, method=method
             )
             iso_readback = _normalize_readback(
-                await make_intervals_request(url=f"/activity/{activity_id}")
+                await _paced_request(url=f"/activity/{activity_id}")
             )
             iso_rpe = iso_readback.get("icu_rpe") if iso_readback else None
             url_template = url.replace(athlete_id, ATHLETE_REDACTED).replace(
@@ -342,7 +369,7 @@ async def spike_activity_custom_field_put_shapes(athlete_id: str) -> dict[str, A
         findings["icu_rpe_path"] = "unresolved"
 
     # ---- Step D: cleanup ----
-    delete_resp = await make_intervals_request(
+    delete_resp = await _paced_request(
         url=f"/activity/{activity_id}", method="DELETE"
     )
     findings["delete_response"] = delete_resp
@@ -357,31 +384,40 @@ async def spike_activity_custom_field_put_shapes(athlete_id: str) -> dict[str, A
 async def spike_wellness_subjective_scales(athlete_id: str) -> dict[str, Any]:
     """Probe accepted ranges for the six wellness subjective fields (D-01b).
 
-    For each field, PUT each integer 1..10 against the spike date and
-    GET readback to verify each value that wrote also roundtripped. Build
-    per-field accepted_values list, plus a summary WELLNESS_RANGES_LOCKED
-    dict suitable for direct paste into utils/wellness.py.
+    For each public field name, look up its Intervals.icu API field name
+    (e.g. `sleep_quality` -> `sleepQuality`), PUT each integer 1..10
+    against the spike date, then GET readback to verify each value that
+    wrote also roundtripped. Build per-field `accepted_values` list,
+    plus a summary `WELLNESS_RANGES_LOCKED` dict suitable for direct
+    paste into utils/wellness.py.
 
-    Cleanup: PUT -1 across all probed numeric fields to clear the spike
-    date (Phase 1 confirmed -1 clears wellness numerics).
+    Wellness PUT is upsert (Phase 1 confirmed: write_1 sleepSecs survived
+    write_2 fatigue). The next value in the sweep simply overwrites the
+    previous, so no per-value clear is needed and we save half the calls.
+
+    Cleanup at end: PUT -1 across all probed numeric fields (using their
+    API names) to clear the spike date.
     """
     findings: dict[str, Any] = {
         "spike_date": SPIKE_DATE,
         "endpoint_template": f"/athlete/{ATHLETE_REDACTED}/wellness/{SPIKE_DATE}",
+        "field_api_names": dict(WELLNESS_FIELD_API_NAMES),
         "fields": {},
     }
 
-    for field in WELLNESS_SUBJECTIVE_FIELDS:
+    for public_name in WELLNESS_SUBJECTIVE_FIELDS:
+        api_name = WELLNESS_FIELD_API_NAMES[public_name]
         per_field: dict[str, Any] = {
+            "api_name": api_name,
             "attempts": [],
             "accepted_values": [],
             "accepted_min": None,
             "accepted_max": None,
         }
         for value in WELLNESS_PROBE_VALUES:
-            write_resp = await make_intervals_request(
+            write_resp = await _paced_request(
                 url=f"/athlete/{athlete_id}/wellness/{SPIKE_DATE}",
-                data={field: value},
+                data={api_name: value},
                 method="PUT",
             )
             wrote_ok = not _is_error(write_resp)
@@ -389,11 +425,11 @@ async def spike_wellness_subjective_scales(athlete_id: str) -> dict[str, Any]:
             readback_value: Any = None
             roundtripped = False
             if wrote_ok:
-                readback_resp = await make_intervals_request(
+                readback_resp = await _paced_request(
                     url=f"/athlete/{athlete_id}/wellness",
                     params={"oldest": SPIKE_DATE, "newest": SPIKE_DATE},
                 )
-                readback_value = _wellness_readback_value(readback_resp, field)
+                readback_value = _wellness_readback_value(readback_resp, api_name)
                 roundtripped = readback_value == value
 
             per_field["attempts"].append(
@@ -412,39 +448,36 @@ async def spike_wellness_subjective_scales(athlete_id: str) -> dict[str, Any]:
             if roundtripped:
                 per_field["accepted_values"].append(value)
 
-            # Clear the field between probes so a previous-value carryover
-            # doesn't muddy the next readback. -1 clears numeric wellness
-            # fields per Phase 1 confirmation.
-            await make_intervals_request(
-                url=f"/athlete/{athlete_id}/wellness/{SPIKE_DATE}",
-                data={field: -1},
-                method="PUT",
-            )
-
         if per_field["accepted_values"]:
             per_field["accepted_min"] = min(per_field["accepted_values"])
             per_field["accepted_max"] = max(per_field["accepted_values"])
-        findings["fields"][field] = per_field
+        findings["fields"][public_name] = per_field
         logger.info(
-            "Wellness field %s: accepted=%s",
-            field,
+            "Wellness field %s (api=%s): accepted=%s",
+            public_name,
+            api_name,
             per_field["accepted_values"],
         )
 
-    # Build the paste-ready WELLNESS_RANGES_LOCKED dict.
+    # Build the paste-ready WELLNESS_RANGES_LOCKED dict, keyed by the
+    # PUBLIC param name (the write_wellness_entry signature uses
+    # public names per D-06; the api_name mapping lives next to it).
     locked: dict[str, tuple[int, int] | None] = {}
-    for field, per_field in findings["fields"].items():
+    for public_name, per_field in findings["fields"].items():
         if per_field["accepted_values"]:
-            locked[field] = (per_field["accepted_min"], per_field["accepted_max"])
+            locked[public_name] = (per_field["accepted_min"], per_field["accepted_max"])
         else:
-            locked[field] = None
+            locked[public_name] = None
     findings["WELLNESS_RANGES_LOCKED"] = locked
 
     # Final cleanup pass: clear all probed fields with -1 in one PUT.
-    cleanup_body: dict[str, Any] = dict.fromkeys(WELLNESS_SUBJECTIVE_FIELDS, -1)
+    # Use API names (e.g. sleepQuality not sleep_quality) so the API
+    # actually recognizes them.
+    cleanup_body: dict[str, Any] = dict.fromkeys(
+        WELLNESS_FIELD_API_NAMES.values(), -1
+    )
     cleanup_body["sleepSecs"] = -1
-    cleanup_body["soreness"] = -1
-    findings["cleanup_response"] = await make_intervals_request(
+    findings["cleanup_response"] = await _paced_request(
         url=f"/athlete/{athlete_id}/wellness/{SPIKE_DATE}",
         data=cleanup_body,
         method="PUT",
