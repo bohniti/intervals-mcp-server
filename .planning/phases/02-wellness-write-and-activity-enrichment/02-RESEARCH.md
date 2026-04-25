@@ -885,27 +885,29 @@ The shape above is illustrative; the planner finalizes the variant list during p
 
 **Action for planner:** Line up Plan 02-01 to resolve A4, A5, A6 before Plan 02-04 begins. A1 is a sanity check that happens during 02-02 implementation.
 
-## Open Questions
+## Open Questions (RESOLVED via Plan 02-01 execution)
+
+> Each question's `Recommendation` line is the resolution path; Plan 02-01's `02-SPIKE-FINDINGS.md` carries the actual locked values that closed each question. Inline `**RESOLVED via Plan 02-01:**` markers below make the resolution traceable per Nyquist Dimension 11 (research_resolution).
 
 1. **Activity custom-field PUT body shape (Plan 02-01 closes)**
    - What we know: Phase 1 spike tried top-level keys → 422; readback showed unchanged activity. DELETE works, so cleanup is feasible.
    - What's unclear: Which body shape (top-level, nested envelope, alternate URL, alternate method, tags-array hybrid) lands the write. CONTEXT.md `<specifics>` requires the probe to produce paste-ready code blocks for the winning shape.
-   - Recommendation: Plan 02-01 enumerates ≥6 variants in fixed order; first roundtrip wins; if all fail, exit code 2 → re-discuss (D-05).
+   - **RESOLVED via Plan 02-01:** Recommendation: Plan 02-01 enumerates ≥6 variants in fixed order; first roundtrip wins; if all fail, exit code 2 → re-discuss (D-05).
 
 2. **Wellness subjective-field ranges (Plan 02-01 closes)**
    - What we know: `fatigue: 5` returned 422; `soreness: 3` worked. Range upper bound is somewhere between 3 and 5 for `fatigue` (likely 1-4, common in Intervals.icu UI).
    - What's unclear: Which fields use 1-4 vs 1-10 vs other. Documentation is sparse.
-   - Recommendation: Plan 02-01 probes 1..10 per field, records `accepted/rejected/range` per field; ranges land in `WELLNESS_RANGES` dict (D-07, D-19).
+   - **RESOLVED via Plan 02-01:** Recommendation: Plan 02-01 probes 1..10 per field, records `accepted/rejected/range` per field; ranges land in `WELLNESS_RANGES` dict (D-07, D-19).
 
 3. **Single-PUT vs split-PUT for icu_rpe + custom fields (Plan 02-01 closes)**
    - What we know: Phase 1's `{"discipline": "bouldering", "icu_rpe": 6}` returned 422. Cause could be (a) body shape (open Q1), (b) co-location, or (c) both.
    - What's unclear: Once body shape is closed (Q1), does a single PUT carrying both fields work, or must `icu_rpe` go separately?
-   - Recommendation: Plan 02-01 probe variant 3 (`icu_rpe_only`) separately to isolate the native-field write path. D-16 handles either outcome.
+   - **RESOLVED via Plan 02-01:** Recommendation: Plan 02-01 probe variant 3 (`icu_rpe_only`) separately to isolate the native-field write path. D-16 handles either outcome.
 
 4. **`feel` field as alternative to `mood`**
    - What we know: Intervals.icu UI has both `mood` and `feel` per the wellness response (Phase 1 readback). Sport settings show `showFeel: true`.
    - What's unclear: Whether to expose a `feel` param. CONTEXT.md Discretion bullet says "currently not in scope; defer unless probe surfaces an Intervals.icu equivalent worth supporting."
-   - Recommendation: Plan 02-01 probe SHOULD probe `feel` alongside `mood` to record its acceptance and scale. If both behave identically, defer (one is enough). If `feel` is the canonical 1-5 emoji-style, surface as a v2 ticket — do NOT add to Phase 2 scope.
+   - **RESOLVED via Plan 02-01:** Recommendation: Plan 02-01 probe SHOULD probe `feel` alongside `mood` to record its acceptance and scale. If both behave identically, defer (one is enough). If `feel` is the canonical 1-5 emoji-style, surface as a v2 ticket — do NOT add to Phase 2 scope.
 
 ## Environment Availability
 
