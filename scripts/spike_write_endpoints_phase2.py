@@ -487,24 +487,38 @@ async def spike_wellness_subjective_scales(athlete_id: str) -> dict[str, Any]:
 
 
 def _detect_unknown_custom_field_pattern(attempts: list[dict[str, Any]]) -> bool:
-    """Return True if all attempts failed with API saying \"Unknown custom field [X]\".
+    """Return True if the failure pattern matches SETUP-01 (schemas not defined).
 
-    This signature means the API recognized the body shape but the athlete
-    account hasn't defined the custom-field schemas — i.e. SETUP-01 has
-    not been completed. Emits a different recommendation than a true body-
-    shape failure (which would warrant the D-05 Key-Decision re-discuss).
+    The signal: PUT /activity/{id} (the canonical endpoint that returns 200
+    for native fields like icu_rpe, confirmed in this same probe) returned
+    422 across all body variants. 422 means the URL+method are valid but
+    the body was rejected — combined with the icu_rpe split-PUT working on
+    the same endpoint, the only remaining explanation is that the
+    custom-field SCHEMAS haven't been defined on the athlete account.
+
+    `make_intervals_request` discards the API's verbose error text and
+    only keeps the canned status phrase, so we can't grep the message
+    string for "Unknown custom field" — we rely on the status code +
+    endpoint pattern instead. (Discovered during the live Phase 2 run:
+    every PUT /activity/{id} top-level + nested-envelope body returned
+    422 with API text "Unknown custom field [<key>]".)
     """
     if not attempts:
         return False
-    saw_unknown = False
+    canonical_422 = 0
     for attempt in attempts:
+        endpoint_label = attempt.get("endpoint_label", "")
+        if endpoint_label != "PUT_/activity/{id}":
+            continue  # only count canonical endpoint attempts
         resp = attempt.get("write_response") or {}
         if not isinstance(resp, dict):
             continue
-        msg = str(resp.get("message", ""))
-        if "Unknown custom field" in msg:
-            saw_unknown = True
-    return saw_unknown
+        if resp.get("status_code") == 422:
+            canonical_422 += 1
+    # 4 body variants × 1 canonical endpoint = 4 attempts; require all 4
+    # to be 422 to declare SETUP-01. (If even one body variant
+    # roundtripped we'd have a winning_body and never reach here.)
+    return canonical_422 >= 4
 
 
 def _format_winning_body_block(activity_findings: dict[str, Any]) -> list[str]:
