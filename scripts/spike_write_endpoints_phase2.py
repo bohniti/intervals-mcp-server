@@ -486,11 +486,33 @@ async def spike_wellness_subjective_scales(athlete_id: str) -> dict[str, Any]:
     return findings
 
 
+def _detect_unknown_custom_field_pattern(attempts: list[dict[str, Any]]) -> bool:
+    """Return True if all attempts failed with API saying \"Unknown custom field [X]\".
+
+    This signature means the API recognized the body shape but the athlete
+    account hasn't defined the custom-field schemas — i.e. SETUP-01 has
+    not been completed. Emits a different recommendation than a true body-
+    shape failure (which would warrant the D-05 Key-Decision re-discuss).
+    """
+    if not attempts:
+        return False
+    saw_unknown = False
+    for attempt in attempts:
+        resp = attempt.get("write_response") or {}
+        if not isinstance(resp, dict):
+            continue
+        msg = str(resp.get("message", ""))
+        if "Unknown custom field" in msg:
+            saw_unknown = True
+    return saw_unknown
+
+
 def _format_winning_body_block(activity_findings: dict[str, Any]) -> list[str]:
     """Render the LOCKED activity custom-field PUT shape section."""
     winning_body = activity_findings.get("winning_body")
     method = activity_findings.get("winning_method")
     url_template = activity_findings.get("winning_url_template")
+    attempts = activity_findings.get("attempts", []) or []
 
     lines: list[str] = []
     if winning_body is not None:
@@ -506,21 +528,72 @@ def _format_winning_body_block(activity_findings: dict[str, Any]) -> list[str]:
         lines.append("body = ")
         lines.append(json.dumps(winning_body, indent=4, default=str))
         lines.append("\n```\n\n")
+    elif _detect_unknown_custom_field_pattern(attempts):
+        # API recognized the shape but the schemas don't exist. This is
+        # the SETUP-01 prerequisite, not a Key Decision invalidation.
+        lines.append(
+            "## Activity custom-field PUT shape (UNRESOLVED - SETUP-01 PREREQUISITE NOT MET)\n\n"
+        )
+        lines.append(
+            "**Diagnosis.** Every PUT with the climbing custom-field keys at the top "
+            "level returned `422 \"Unknown custom field [<key>]\"`. This error pattern "
+            "means the Intervals.icu API recognized the body shape (top-level keys is "
+            "the right envelope) but the custom-field SCHEMAS have not been defined on "
+            "the athlete's account yet. This is exactly the SETUP-01 prerequisite "
+            "documented in PROJECT.md (\"User prerequisite: Intervals.icu custom fields "
+            "must exist in the athlete's account before the tools that write them will "
+            "work\").\n\n"
+        )
+        lines.append("**Required action by user (does NOT invalidate any Key Decision):**\n\n")
+        lines.append(
+            "1. Open Intervals.icu web UI -> athlete settings -> custom fields.\n"
+            "2. Create the seven custom-field schemas the README's SETUP-01 section "
+            "lists: `discipline`, `indoor`, `session_focus`, `top_grade_sent`, "
+            "`top_grade_attempted`, `sends`, `attempts` (with the exact keys and "
+            "types from `src/intervals_mcp_server/utils/climbing.py` "
+            "`CUSTOM_FIELD_KEYS`).\n"
+            "3. Re-run `uv run python scripts/spike_write_endpoints_phase2.py` to "
+            "confirm all seven keys roundtrip — that re-run will rewrite this "
+            "section to LOCKED with the paste-ready body.\n\n"
+        )
+        lines.append(
+            "**Body shape working hypothesis (to confirm by post-SETUP-01 re-run):** "
+            "top-level keys via `PUT /activity/{id}` — this is what the 422 error "
+            "messages strongly suggest. The other body envelopes "
+            "(`custom_fields`, `customFields`, `fields`) all returned the SAME "
+            "\"Unknown custom field [X]\" pattern with the envelope name as `[X]`, "
+            "which confirms the API treats top-level keys as candidate custom-field "
+            "names — exactly what we want.\n\n"
+        )
+        lines.append(
+            "**Plan 02-04 disposition:** Plan 02-04 implementation can proceed "
+            "**after** the user finishes SETUP-01 and the spike re-run confirms "
+            "the body shape. The existing `verify_custom_fields_setup` MCP tool "
+            "from Phase 1 (D-11) is the runtime guard that protects "
+            "`enrich_activity_climbing` from this same failure mode in production "
+            "(D-20).\n\n"
+        )
+        lines.append("**All attempts (full audit trail):**\n\n")
+        lines.append("```json\n")
+        lines.append(json.dumps(attempts, indent=2, default=str))
+        lines.append("\n```\n\n")
     else:
         lines.append(
             "## Activity custom-field PUT shape (UNRESOLVED - Plan 02-04 BLOCKED - D-05)\n\n"
         )
         lines.append(
             "**Hard-stop.** No body x endpoint combination roundtripped all seven "
-            "climbing custom-field keys. Plan 02-04 (`enrich_activity_climbing`) "
-            "MUST NOT begin until the user re-discusses the "
-            '"Structured climbing data -> Intervals.icu custom fields" Key Decision '
-            "in PROJECT.md. Possible re-discussions: description-as-structured-text "
-            "fallback, or scope-cut to RPE-only enrichment.\n\n"
+            "climbing custom-field keys, AND none of the failures matched the "
+            "\"Unknown custom field\" SETUP-01 pattern. Plan 02-04 "
+            "(`enrich_activity_climbing`) MUST NOT begin until the user re-discusses "
+            "the \"Structured climbing data -> Intervals.icu custom fields\" Key "
+            "Decision in PROJECT.md. Possible re-discussions: "
+            "description-as-structured-text fallback, or scope-cut to RPE-only "
+            "enrichment.\n\n"
         )
         lines.append("**All attempts (full audit trail):**\n\n")
         lines.append("```json\n")
-        lines.append(json.dumps(activity_findings.get("attempts", []), indent=2, default=str))
+        lines.append(json.dumps(attempts, indent=2, default=str))
         lines.append("\n```\n\n")
     return lines
 
@@ -707,10 +780,26 @@ async def main() -> None:
     logger.info("Findings written to %s", FINDINGS_PATH)
 
     # D-05 hard-stop: if no activity custom-field PUT body roundtripped,
-    # exit non-zero so a human reviewer can block Plan 02-04.
+    # exit non-zero so a human reviewer can block Plan 02-04. Distinguish
+    # the SETUP-01 case (recoverable: user defines schemas + re-run) from
+    # a true Key Decision invalidation (irrecoverable without re-discuss).
     if activity_findings.get("winning_body") is None:
-        logger.error("HARD-STOP (D-05): no activity custom-field PUT body roundtripped.")
-        logger.error("Re-discuss before Plan 02-04 begins. Findings: %s", FINDINGS_PATH)
+        attempts = activity_findings.get("attempts") or []
+        if _detect_unknown_custom_field_pattern(attempts):
+            logger.error(
+                "HARD-STOP (D-05 -> SETUP-01): every activity custom-field PUT failed "
+                "with API \"Unknown custom field [<key>]\" — schemas are not defined "
+                "on the athlete account. Body shape is correct; complete SETUP-01 "
+                "(README) and re-run this spike."
+            )
+        else:
+            logger.error(
+                "HARD-STOP (D-05): no activity custom-field PUT body roundtripped, "
+                "and the failure pattern does NOT match SETUP-01. Re-discuss the "
+                "\"Structured climbing data -> Intervals.icu custom fields\" Key "
+                "Decision in PROJECT.md before Plan 02-04 begins."
+            )
+        logger.error("Findings: %s", FINDINGS_PATH)
         sys.exit(2)
     sys.exit(0)
 
