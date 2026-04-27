@@ -51,8 +51,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 5 plans
 **Plan list**:
 - [x] 02-01-PLAN.md — Phase 2 second-probe spike (resolves D-01a/b/c, locks PUT body shape, wellness ranges, icu_rpe path) — non-autonomous (D-05 review gate)
-- [ ] 02-02-PLAN.md — utils/wellness.py module (WELLNESS_RANGES, build_wellness_put_body, sleep_hours_to_secs) + test_wellness_write.py scaffolding
-- [ ] 02-03-PLAN.md — write_wellness_entry MCP tool (additive in tools/wellness.py) + WELL-01/02/03 unit tests
+- [x] 02-02-PLAN.md — utils/wellness.py module (WELLNESS_RANGES, build_wellness_put_body, sleep_hours_to_secs) + test_wellness_write.py scaffolding
+- [x] 02-03-PLAN.md — write_wellness_entry MCP tool (additive in tools/wellness.py) + WELL-01/02/03 unit tests
 - [ ] 02-04-PLAN.md — enrich_activity_climbing MCP tool (additive in tools/climbing.py) + CLIMB-03..07 / CLIMB-10 unit tests
 - [ ] 02-05-PLAN.md — format_climbing_activity post-enrichment regression tests + scripts/smoke_phase2.py end-to-end live test (D-25)
 **UI hint**: no
