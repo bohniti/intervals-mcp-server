@@ -107,4 +107,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-24 — Phase 1 (Foundation and Write-Path Spike) complete: climbing utility layer in place (utils/climbing.py, utils/grades.py, formatter extension), live write endpoints confirmed against Intervals.icu (PUT /wellness upsert-safe, POST /activities/manual returns id, DELETE available for cleanup), verify_custom_fields_setup MCP tool shipped, README SETUP-01 section added.*
+*Last updated: 2026-04-27 — Phase 2 (Wellness Write and Activity Enrichment) complete: write_wellness_entry tool with drop-None upsert + readback verification (WELL-01/02/03), enrich_activity_climbing tool with split-PUT (icu_rpe first, custom fields second) + default-deny override audit + discipline-aware grade validation (CLIMB-03/04/05/06/07/10), 128/128 tests pass. Wellness ranges locked at (1, 4) for 6 subjective fields. Live custom-field roundtrip pending SETUP-01 (athlete-defined custom-field schemas) — items tracked in 02-HUMAN-UAT.md.*
