@@ -215,3 +215,118 @@ def test_verify_internal_helper_returns_tuple(monkeypatch: pytest.MonkeyPatch) -
     assert len(missing) == len(CUSTOM_FIELD_KEYS)
     assert isinstance(message, str)
     assert ok is (len(missing) == 0)
+
+
+# ---------------------------------------------------------------------------
+# Formatter tests for format_climbing_activity (CLIMB-10 — formatting flavour).
+# Phase 2 contribution: the existing Phase 1 renderer already covers all 11
+# fields including icu_rpe. These tests lock the current behaviour so any
+# future edit that drops or reshapes a field fails fast.
+# ---------------------------------------------------------------------------
+
+
+def test_format_climbing_activity_renders_icu_rpe() -> None:
+    """CLIMB-10 (formatting flavour): post-enrichment readback renders icu_rpe
+    and all supplied climbing fields without regressing the 11 existing fields.
+    """
+    from intervals_mcp_server.utils.formatting import format_climbing_activity
+
+    fully_populated = {
+        "id": "i142495224",
+        "name": "Bouldering session",
+        "start_date_local": "2099-01-01T00:00:00",
+        "discipline": "bouldering",
+        "indoor": True,
+        "session_focus": "power",
+        "top_grade_sent": "6A+",
+        "top_grade_attempted": "7A",
+        "sends": 4,
+        "attempts": 7,
+        "icu_rpe": 6,
+    }
+    rendered = format_climbing_activity(fully_populated)
+    # All 11 fields render with their values.
+    assert "Climbing Activity" in rendered
+    assert "ID: i142495224" in rendered
+    assert "Name: Bouldering session" in rendered
+    assert "Date: 2099-01-01T00:00:00" in rendered
+    assert "Discipline: bouldering" in rendered
+    assert "Indoor: Yes" in rendered
+    assert "Session focus: power" in rendered
+    assert "Top grade sent: 6A+" in rendered
+    assert "Top grade attempted: 7A" in rendered
+    assert "Sends: 4" in rendered
+    assert "Attempts: 7" in rendered
+    assert "RPE: 6/10" in rendered
+
+
+def test_format_climbing_activity_handles_empty_activity() -> None:
+    """Defensive — a freshly-created activity with no climbing fields renders
+    structurally with N/A placeholders (carry-forward from Phase 1 behavior).
+    """
+    from intervals_mcp_server.utils.formatting import format_climbing_activity
+
+    rendered = format_climbing_activity({})
+    # 11-field structural assertion — N/A placeholders for missing data.
+    assert rendered.count("N/A") >= 9, rendered  # 9 fields use N/A; 'indoor' renders as "N/A"; rpe as "N/A"
+    assert "Climbing Activity" in rendered
+    assert "Indoor: N/A" in rendered
+    assert "RPE: N/A" in rendered
+
+
+def test_format_climbing_activity_indoor_false_renders_no() -> None:
+    """`indoor: False` must render as 'No', not 'N/A' or 'False'."""
+    from intervals_mcp_server.utils.formatting import format_climbing_activity
+
+    rendered = format_climbing_activity({"indoor": False})
+    assert "Indoor: No" in rendered
+
+
+def test_format_climbing_activity_rpe_float_renders() -> None:
+    """API may return icu_rpe as float; the renderer accepts both int and float."""
+    from intervals_mcp_server.utils.formatting import format_climbing_activity
+
+    rendered = format_climbing_activity({"icu_rpe": 6.0})
+    assert "RPE: 6.0/10" in rendered
+
+
+def test_format_climbing_activity_renders_existing_fields_unchanged() -> None:
+    """I-07 fix: snapshot regression guard. For a fixed Phase-1-shaped input, the renderer
+    output MUST byte-equal a captured expected string. Replaces the previous regex-based
+    'function body unchanged' check that silently passed on missing keywords.
+
+    If the renderer body changes in a way that alters output, this test fails — that is
+    the only correct way to detect regression.
+    """
+    from intervals_mcp_server.utils.formatting import format_climbing_activity
+
+    snapshot_input = {
+        "id": "phase1-snapshot",
+        "name": "Phase 1 baseline",
+        "start_date_local": "2025-01-01T00:00:00",
+    }
+    actual = format_climbing_activity(snapshot_input)
+
+    # Captured by running format_climbing_activity(snapshot_input) once with the
+    # current Phase-1-shaped renderer body. Any future edit to the renderer that
+    # alters this output for the same input must update this expected string in
+    # the same commit, making the regression intentional and reviewable.
+    expected = (
+        "Climbing Activity\n"
+        "  ID: phase1-snapshot\n"
+        "  Name: Phase 1 baseline\n"
+        "  Date: 2025-01-01T00:00:00\n"
+        "  Discipline: N/A\n"
+        "  Indoor: N/A\n"
+        "  Session focus: N/A\n"
+        "  Top grade sent: N/A\n"
+        "  Top grade attempted: N/A\n"
+        "  Sends: N/A\n"
+        "  Attempts: N/A\n"
+        "  RPE: N/A\n"
+    )
+    assert actual == expected, (
+        f"format_climbing_activity output drifted from the captured snapshot.\n"
+        f"Expected:\n{expected!r}\n"
+        f"Actual:\n{actual!r}"
+    )
