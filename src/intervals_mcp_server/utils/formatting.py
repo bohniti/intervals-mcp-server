@@ -552,11 +552,18 @@ Cadence: Avg {group.get("average_cadence", 0)}, Max {group.get("max_cadence", 0)
 def format_climbing_activity(activity: dict[str, Any]) -> str:
     """Format a climbing activity (custom fields + RPE) into a readable string.
 
-    Renders only the fields Phase 1 establishes: discipline, indoor,
+    Renders the climbing fields Phase 1 establishes: discipline, indoor,
     session_focus, top_grade_sent, top_grade_attempted, sends, attempts,
     icu_rpe. Activities without these fields render mostly-N/A lines, which
     is exactly what we want for a readback of a freshly-created activity
     before enrichment.
+
+    Phase 2 reuses this renderer for the success path of
+    `enrich_activity_climbing` (post-enrichment readback) — supplied fields
+    are present after a successful PUT so the function naturally renders
+    them; missing/N/A fields indicate either an unsupplied param or a
+    silent-ignore failure (Pitfall #2; the tool catches that at the
+    readback-equality step before reaching this renderer).
 
     Args:
         activity: Dict shaped like an Intervals.icu activity JSON. Custom
