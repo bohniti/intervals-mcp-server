@@ -22,13 +22,13 @@ Finish a climbing session → tell Claude → in one short conversation a comple
 - ✓ Read custom items — existing (`src/intervals_mcp_server/tools/custom_items.py`)
 - ✓ FastMCP server with stdio / SSE / streamable-http transports — existing (`src/intervals_mcp_server/server.py`, `server_setup.py`)
 - ✓ Single HTTP boundary through `make_intervals_request()` with auth, retry, error mapping — existing (`src/intervals_mcp_server/api/client.py`)
+- ✓ Mark a planned event as done — creates a **linked activity**; the planned event stays on the calendar — Validated in Phase 3 (`complete_climbing_session` in `src/intervals_mcp_server/tools/climbing.py`)
+- ✓ Create a climbing activity from scratch (fully manual entry, no watch) — Validated in Phase 3 (`create_climbing_activity` in `src/intervals_mcp_server/tools/climbing.py`)
 
 ### Active
 
 <!-- v1 hypotheses for this milestone. Move to Validated after ship + use. -->
 
-- [ ] Mark a planned event as done — creates a **linked activity**; the planned event stays on the calendar
-- [ ] Create a climbing activity from scratch (fully manual entry, no watch)
 - [ ] Enrich an existing activity (e.g., Garmin-synced) with climbing metadata + RPE
 - [ ] Capture structured climbing fields on completion: **discipline** (bouldering / sport lead / top-rope / trad, gym vs outdoor), **volume & grades** (sends + attempts in Font for boulders, French sport for routes), **session focus** (power / endurance / technique / projecting / mileage)
 - [ ] Write RPE (1–10) to the native `icu_rpe` field on the activity
@@ -107,4 +107,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-27 — Phase 2 (Wellness Write and Activity Enrichment) complete: write_wellness_entry tool with drop-None upsert + readback verification (WELL-01/02/03), enrich_activity_climbing tool with split-PUT (icu_rpe first, custom fields second) + default-deny override audit + discipline-aware grade validation (CLIMB-03/04/05/06/07/10), 128/128 tests pass. Wellness ranges locked at (1, 4) for 6 subjective fields. Live custom-field roundtrip pending SETUP-01 (athlete-defined custom-field schemas) — items tracked in 02-HUMAN-UAT.md.*
+*Last updated: 2026-04-28 — Phase 3 (Activity Creation and Session Completion) complete: create_climbing_activity tool with duplicate-guard GET-before-POST + optional single-shot enrichment via _enrich_impl (CLIMB-02, CLIMB-09), complete_climbing_session tool implementing event GET → already-paired check → duplicate guard → POST with explicit paired_event_id → readback verification (CLIMB-01, CLIMB-09), and refactor of enrich_activity_climbing into a private _enrich_impl(_skip_conflict_scan=False) helper that public callers and the new creation tools share. 147/147 tests pass; ruff + mypy clean. Phase 2 still trailing live custom-field roundtrip on SETUP-01 (tracked in 02-HUMAN-UAT.md). Phase 4 (Training Status Report) is next.*
