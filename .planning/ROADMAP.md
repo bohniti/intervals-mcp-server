@@ -67,9 +67,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Calling `create_climbing_activity` a second time for the same date (simulating MCP reconnect or LLM retry) surfaces the existing activity and does not create a second record in Intervals.icu
 **Plans**: 3 plans
 **Plan list**:
-- [ ] 03-01-PLAN.md — Refactor enrich_activity_climbing body into private _enrich_impl(_skip_conflict_scan=False) helper; preserve Phase 2 public behavior verbatim (Wave 1)
-- [ ] 03-02-PLAN.md — create_climbing_activity MCP tool (additive in tools/climbing.py) + tests/test_climbing_create.py with CLIMB-02 / CLIMB-09 / Pitfall #4 coverage (Wave 2)
-- [ ] 03-03-PLAN.md — complete_climbing_session MCP tool (event GET → POST with explicit paired_event_id → readback verifies link) + 6 added tests covering CLIMB-01 / CLIMB-09 (Wave 3 — depends on Plan 02 to avoid same-wave file overlap)
+- [x] 03-01-PLAN.md — Refactor enrich_activity_climbing body into private _enrich_impl(_skip_conflict_scan=False) helper; preserve Phase 2 public behavior verbatim (Wave 1)
+- [x] 03-02-PLAN.md — create_climbing_activity MCP tool (additive in tools/climbing.py) + tests/test_climbing_create.py with CLIMB-02 / CLIMB-09 / Pitfall #4 coverage (Wave 2)
+- [x] 03-03-PLAN.md — complete_climbing_session MCP tool (event GET → POST with explicit paired_event_id → readback verifies link) + 6 added tests covering CLIMB-01 / CLIMB-09 (Wave 3 — depends on Plan 02 to avoid same-wave file overlap)
 **UI hint**: no
 
 ### Phase 4: Training Status Report
