@@ -648,3 +648,308 @@ def test_create_with_climbing_fields_calls_enrich_with_skip_flag(
     assert pre_put_get_on_new_id["count"] == 0, (
         "D-12 — _skip_conflict_scan=True must skip the pre-PUT GET on a fresh activity"
     )
+
+
+# ===========================================================================
+# complete_climbing_session — CLIMB-01, CLIMB-09, paired_event_id readback.
+# ===========================================================================
+
+
+def _make_fake_event(
+    event_id: str = "ev123",
+    *,
+    paired_event_id: object = None,
+    start_date_local: str = "2026-04-27T00:00:00",
+    event_type: str = "WeightTraining",
+    name: str = "Sport bouldering",
+    moving_time: object = 5400,
+) -> dict[str, object]:
+    """Fake planned-event GET response."""
+    return {
+        "id": event_id,
+        "start_date_local": start_date_local,
+        "type": event_type,
+        "name": name,
+        "paired_event_id": paired_event_id,
+        "moving_time": moving_time,
+        "category": "WORKOUT",
+    }
+
+
+def test_complete_tool_registered() -> None:
+    """complete_climbing_session is async; signature has 11 params; event_id is required."""
+    from intervals_mcp_server.tools.climbing import complete_climbing_session
+
+    assert inspect.iscoroutinefunction(complete_climbing_session)
+    sig = inspect.signature(complete_climbing_session)
+    assert len(sig.parameters) == 11, list(sig.parameters)
+    assert sig.parameters["event_id"].default is inspect.Parameter.empty
+    # No `date`, `type`, `duration_minutes`, `name` — those come from the event.
+    for forbidden in ("date", "type", "duration_minutes", "name"):
+        assert forbidden not in sig.parameters, (
+            f"complete_climbing_session must NOT accept {forbidden!r} — "
+            "the event is the source of truth (D-07)."
+        )
+
+
+def test_complete_event_provides_date_type_name_and_paired_event_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CLIMB-01: event GET → POST with explicit paired_event_id → readback OK → success.
+    Asserts POST body fields all come verbatim from the event."""
+    from intervals_mcp_server.tools.climbing import complete_climbing_session
+
+    captured_post: list[dict[str, Any]] = []
+    counters = {"event_get": 0, "dup_get": 0, "post": 0, "readback_get": 0}
+
+    async def fake_request(
+        url: str,
+        api_key: str | None = None,
+        params: dict[str, Any] | None = None,
+        method: str = "GET",
+        data: dict[str, Any] | None = None,
+    ) -> Any:
+        if method == "GET" and "/event/" in url and "/events" not in url:
+            counters["event_get"] += 1
+            return _make_fake_event("ev123")
+        if method == "GET" and url.endswith("/activities"):
+            counters["dup_get"] += 1
+            return []
+        if method == "POST" and url.endswith("/activities/manual"):
+            counters["post"] += 1
+            captured_post.append(dict(data or {}))
+            return {
+                "id": "iX",
+                "start_date_local": "2026-04-27T00:00:00",
+                "type": "WeightTraining",
+                "name": "Sport bouldering",
+                "paired_event_id": "ev123",  # Intervals.icu accepted the explicit set
+            }
+        if method == "GET" and url == "/activity/iX":
+            counters["readback_get"] += 1
+            activity = _make_fake_clean_activity("iX")
+            activity["paired_event_id"] = "ev123"
+            return activity
+        return []
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.climbing.make_intervals_request", fake_request
+    )
+
+    result = asyncio.run(
+        complete_climbing_session(event_id="ev123", athlete_id="i1")
+    )
+    assert result == (
+        "Successfully completed session: created activity iX paired to event ev123."
+    ), result
+    # Order of HTTP calls.
+    assert counters["event_get"] == 1
+    assert counters["dup_get"] == 1
+    assert counters["post"] == 1
+    assert counters["readback_get"] == 1
+    # POST body must use event values verbatim and set paired_event_id explicitly.
+    assert len(captured_post) == 1
+    body = captured_post[0]
+    assert body["paired_event_id"] == "ev123", body
+    assert body["start_date_local"] == "2026-04-27T00:00:00", body
+    assert body["type"] == "WeightTraining", body
+    assert body["name"] == "Sport bouldering", body
+    assert body["moving_time"] == 5400, body  # event-supplied
+
+
+def test_complete_already_paired_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
+    """specifics: event GET returns paired_event_id non-null → tool refuses.
+    No duplicate-guard GET, no POST."""
+    from intervals_mcp_server.tools.climbing import complete_climbing_session
+
+    counters = {"event_get": 0, "dup_get": 0, "post": 0}
+
+    async def fake_request(
+        url: str,
+        api_key: str | None = None,
+        params: dict[str, Any] | None = None,
+        method: str = "GET",
+        data: dict[str, Any] | None = None,
+    ) -> Any:
+        if method == "GET" and "/event/" in url and "/events" not in url:
+            counters["event_get"] += 1
+            return _make_fake_event("ev123", paired_event_id="i999")
+        if method == "GET" and url.endswith("/activities"):
+            counters["dup_get"] += 1
+            raise AssertionError("duplicate-guard GET must not run on already-paired refusal")
+        if method == "POST":
+            counters["post"] += 1
+            raise AssertionError("POST must not run on already-paired refusal")
+        return []
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.climbing.make_intervals_request", fake_request
+    )
+
+    result = asyncio.run(
+        complete_climbing_session(event_id="ev123", athlete_id="i1")
+    )
+    assert result == (
+        "Event ev123 is already paired to activity i999. "
+        "Call enrich_activity_climbing(activity_id=i999, ...) "
+        "to add climbing metadata."
+    ), result
+    assert counters["event_get"] == 1
+    assert counters["dup_get"] == 0
+    assert counters["post"] == 0
+
+
+def test_complete_duplicate_guard_on_event_date(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CLIMB-09 / D-03: even with a planned event, if a WeightTraining activity
+    already exists on the event's date, refuse without POSTing."""
+    from intervals_mcp_server.tools.climbing import complete_climbing_session
+
+    counters = {"post": 0}
+
+    async def fake_request(
+        url: str,
+        api_key: str | None = None,
+        params: dict[str, Any] | None = None,
+        method: str = "GET",
+        data: dict[str, Any] | None = None,
+    ) -> Any:
+        if method == "GET" and "/event/" in url and "/events" not in url:
+            return _make_fake_event("ev123")  # event is valid, not paired
+        if method == "GET" and url.endswith("/activities"):
+            return [
+                {
+                    "id": "i777",
+                    "name": "Garmin-synced session",
+                    "type": "WeightTraining",
+                    "start_date_local": "2026-04-27T00:00:00",
+                },
+            ]
+        if method == "POST":
+            counters["post"] += 1
+            raise AssertionError("POST must not happen on duplicate-guard refusal")
+        return []
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.climbing.make_intervals_request", fake_request
+    )
+
+    result = asyncio.run(
+        complete_climbing_session(event_id="ev123", athlete_id="i1")
+    )
+    assert result.startswith("Error: a WeightTraining activity already exists on 2026-04-27"), result
+    assert "i777" in result
+    assert "Garmin-synced session" in result
+    assert "Call enrich_activity_climbing" in result
+    assert counters["post"] == 0
+
+
+def test_complete_paired_event_id_readback_mismatch_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """specifics: POST OK but readback shows different paired_event_id (or null)
+    → return the mismatch error. No DELETE on the activity."""
+    from intervals_mcp_server.tools.climbing import complete_climbing_session
+
+    counters = {"delete": 0}
+
+    async def fake_request(
+        url: str,
+        api_key: str | None = None,
+        params: dict[str, Any] | None = None,
+        method: str = "GET",
+        data: dict[str, Any] | None = None,
+    ) -> Any:
+        if method == "GET" and "/event/" in url and "/events" not in url:
+            return _make_fake_event("ev123")
+        if method == "GET" and url.endswith("/activities"):
+            return []
+        if method == "POST" and url.endswith("/activities/manual"):
+            return {"id": "iX", "start_date_local": "2026-04-27T00:00:00", "type": "WeightTraining", "paired_event_id": None}
+        if method == "GET" and url == "/activity/iX":
+            activity = _make_fake_clean_activity("iX")
+            activity["paired_event_id"] = None  # mismatch — explicit-set didn't take
+            return activity
+        if method == "DELETE":
+            counters["delete"] += 1
+            raise AssertionError("DELETE must not happen on paired-event-id mismatch")
+        return []
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.climbing.make_intervals_request", fake_request
+    )
+
+    result = asyncio.run(
+        complete_climbing_session(event_id="ev123", athlete_id="i1")
+    )
+    assert result.startswith("Error: paired_event_id mismatch on activity iX"), result
+    assert "sent 'ev123'" in result, result
+    assert counters["delete"] == 0
+
+
+def test_complete_enrichment_fails_after_post_keeps_activity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D-09: POST OK, readback verifies paired_event_id, but _enrich_impl fails
+    (verify-fields GET returns [] → 'missing fields' error). Activity preserved,
+    error names activity_id, retry hint included, NO DELETE."""
+    from intervals_mcp_server.tools.climbing import complete_climbing_session
+
+    counters = {"delete": 0}
+
+    async def fake_request(
+        url: str,
+        api_key: str | None = None,
+        params: dict[str, Any] | None = None,
+        method: str = "GET",
+        data: dict[str, Any] | None = None,
+    ) -> Any:
+        if method == "GET" and "/event/" in url and "/events" not in url:
+            return _make_fake_event("ev123")
+        if method == "GET" and url.endswith("/activities"):
+            # On the duplicate-guard call (filtered by oldest=2026-04-27): empty.
+            # On the verify-fields call (filtered by limit, no oldest): also empty.
+            # Returning [] for both means duplicate-guard miss AND verify-fields
+            # reports all custom fields missing → enrich short-circuits.
+            return []
+        if method == "POST" and url.endswith("/activities/manual"):
+            return {"id": "iCREATED", "start_date_local": "2026-04-27T00:00:00", "type": "WeightTraining", "paired_event_id": "ev123"}
+        if method == "GET" and url == "/activity/iCREATED":
+            activity = _make_fake_clean_activity("iCREATED")
+            activity["paired_event_id"] = "ev123"  # readback confirms link took
+            return activity
+        if method == "DELETE":
+            counters["delete"] += 1
+            raise AssertionError("DELETE must not happen on enrichment failure")
+        return []
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.climbing.make_intervals_request", fake_request
+    )
+
+    result = asyncio.run(
+        complete_climbing_session(
+            event_id="ev123",
+            discipline="bouldering",  # custom field → triggers verify-fields guard
+            athlete_id="i1",
+        )
+    )
+    assert "iCREATED" in result, result
+    assert "ev123" in result, result
+    assert "but enrichment failed" in result, result
+    assert "Call enrich_activity_climbing(activity_id=iCREATED, override=True" in result, result
+    assert counters["delete"] == 0

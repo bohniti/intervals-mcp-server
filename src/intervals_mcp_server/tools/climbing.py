@@ -726,3 +726,250 @@ async def create_climbing_activity(  # pylint: disable=too-many-arguments,too-ma
             f"override=True, ...) to retry adding climbing metadata."
         )
     return enrich_result
+
+
+@mcp.tool()
+async def complete_climbing_session(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-return-statements,too-many-branches,too-many-locals,too-many-statements
+    event_id: str,
+    discipline: str | None = None,
+    indoor: bool | None = None,
+    session_focus: str | None = None,
+    top_grade_sent: str | None = None,
+    top_grade_attempted: str | None = None,
+    sends: int | None = None,
+    attempts: int | None = None,
+    rpe: int | None = None,
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+) -> str:
+    """Complete a planned climbing event by creating a linked activity (CLIMB-01).
+
+    Use this tool when the user has a planned climbing session on the
+    Intervals.icu calendar and wants to mark it done. The tool fetches
+    the planned event server-side, POSTs a manual activity linked to it
+    via `paired_event_id`, and (if climbing fields are supplied)
+    enriches the new activity in a single tool call.
+
+    The planned event STAYS on the calendar — completion creates a linked
+    activity, it does not delete the planned event (PROJECT.md Key
+    Decision). This preserves planned-vs-actual history.
+
+    Date, type, and name in the new activity all come VERBATIM from the
+    planned event — there is no separate `date` or `type` parameter for
+    the user to drift from the event. The user supplies only the
+    climbing-specific fields (discipline, RPE, grades, etc.).
+
+    Already-paired guard: if the planned event already has a
+    `paired_event_id` (i.e., it has already been completed), the tool
+    refuses with a hint to call `enrich_activity_climbing` on the
+    paired activity instead. This is the second-layer guard against
+    accidental duplicates beyond the date+type check.
+
+    Duplicate guard (CLIMB-09): the tool also runs the same date+type
+    duplicate check as `create_climbing_activity` — if a `WeightTraining`
+    activity already exists on the event's date independent of the event
+    pairing, refuse with the existing activity id(s).
+
+    Readback verification: after POST, the tool reads the new activity
+    back and confirms `paired_event_id == event_id`. If the link did
+    not take, an error is returned naming the activity_id and the
+    mismatch — strong signal that explicit-set was ignored.
+
+    Atomicity (D-09): if POST succeeds but enrichment or paired-event
+    readback fails, the activity is NOT deleted. The error names the
+    new activity_id and hints at retry via `enrich_activity_climbing`.
+
+    Args:
+        event_id: Planned event ID on the Intervals.icu calendar.
+            Required. The tool reads `start_date_local`, `type`, `name`,
+            and `moving_time` from this event verbatim.
+        discipline: bouldering / sport_lead / top_rope / trad.
+        indoor: True for gym, False for outdoors.
+        session_focus: power / endurance / technique / projecting / mileage.
+        top_grade_sent: Hardest grade sent (Font/French as appropriate).
+        top_grade_attempted: Hardest grade attempted.
+        sends: Total successful sends.
+        attempts: Total attempts (including sends).
+        rpe: Rate of Perceived Exertion (1-10), written to native icu_rpe.
+        athlete_id: Optional athlete ID (falls back to ATHLETE_ID env).
+        api_key: Optional API key (falls back to API_KEY env).
+
+    Returns:
+        Success string ('Successfully completed session: created activity
+        {id} paired to event {event_id}.' or the enriched success when
+        climbing fields are supplied), OR an error string naming the
+        failure path (event-not-found / already-paired / duplicate-guard
+        hit / POST error / paired_event_id readback mismatch /
+        enrichment-fail-after-POST).
+    """
+    # --- 1. resolve_athlete_id ----------------------------------------------
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    # --- 2. GET the planned event (D-05) ------------------------------------
+    # URL pattern matches `tools/events.py::get_event_by_id` (singular `/event/{id}`).
+    event_get = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/event/{event_id}",
+        api_key=api_key,
+    )
+    if isinstance(event_get, dict) and "error" in event_get:
+        return f"Error fetching planned event: {event_get.get('message', 'Unknown error')}"
+    if not isinstance(event_get, dict) or not event_get:
+        return f"Error: planned event {event_id} not found."
+
+    # --- 3. Already-paired guard (CONTEXT specifics) ------------------------
+    existing_pair = event_get.get("paired_event_id")
+    if existing_pair:
+        return (
+            f"Event {event_id} is already paired to activity {existing_pair}. "
+            f"Call enrich_activity_climbing(activity_id={existing_pair}, ...) "
+            f"to add climbing metadata."
+        )
+
+    # --- 4. Extract event values (D-07: event is source of truth) -----------
+    event_start_date_local = event_get.get("start_date_local")
+    event_type = event_get.get("type") or "WeightTraining"  # fallback for v1 climbing
+    event_name = event_get.get("name") or f"Climbing — {event_id}"
+    if not isinstance(event_start_date_local, str) or not event_start_date_local:
+        return f"Error: planned event {event_id} has no start_date_local."
+    # Date prefix for the duplicate-guard filter (and for the success message).
+    event_date = event_start_date_local.split("T", 1)[0]
+
+    # --- 5. Duplicate guard (CLIMB-09 / D-03 — both tools enforce) ----------
+    dup_params: dict[str, Any] = {"oldest": event_date, "newest": event_date}
+    dup_result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/activities",
+        api_key=api_key,
+        params=dup_params,
+    )
+    if isinstance(dup_result, dict) and "error" in dup_result:
+        return (
+            f"Error checking for duplicate activities: "
+            f"{dup_result.get('message', 'Unknown error')}"
+        )
+
+    matches: list[dict[str, Any]] = []
+    if isinstance(dup_result, list):
+        for activity in dup_result:
+            if not isinstance(activity, dict):
+                continue
+            if activity.get("type") != "WeightTraining":
+                continue
+            sdl = activity.get("start_date_local") or ""
+            if isinstance(sdl, str) and sdl.startswith(event_date):
+                matches.append(activity)
+
+    if matches:
+        # D-02 / D-04 — same multi-line refusal as create_climbing_activity.
+        lines = [
+            f"Error: a WeightTraining activity already exists on {event_date}; "
+            f"refusing to create a duplicate.",
+            "Matching activities:",
+        ]
+        for a in matches:
+            lines.append(
+                f'  {a.get("id")} — "{a.get("name", "Unnamed")}" ({a.get("start_date_local")})'
+            )
+        lines.append(
+            "Call enrich_activity_climbing(activity_id=..., ...) to add "
+            "climbing metadata to an existing activity."
+        )
+        return "\n".join(lines)
+
+    # --- 6. Build POST body with explicit paired_event_id (D-06, D-07) ------
+    post_body: dict[str, Any] = {
+        "start_date_local": event_start_date_local,  # verbatim from event
+        "type": event_type,                          # verbatim from event
+        "name": event_name,                          # verbatim from event
+        "paired_event_id": event_id,                 # D-06 — explicit
+    }
+    # `moving_time` from the event if provided; else 0 (Intervals.icu accepts 0
+    # per Phase 1 spike when the event did not declare a duration).
+    event_moving_time = event_get.get("moving_time")
+    if isinstance(event_moving_time, int) and event_moving_time > 0:
+        post_body["moving_time"] = event_moving_time
+    else:
+        post_body["moving_time"] = 0
+
+    # --- 7. POST the linked activity ----------------------------------------
+    create_resp = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/activities/manual",
+        api_key=api_key,
+        data=post_body,
+        method="POST",
+    )
+    if isinstance(create_resp, dict) and "error" in create_resp:
+        return f"Error creating activity: {create_resp.get('message', 'Unknown error')}"
+    if not isinstance(create_resp, dict) or not create_resp.get("id"):
+        return f"Error: unexpected response from activity create: {create_resp!r}"
+    new_activity_id = str(create_resp["id"])
+
+    # --- 8. Readback verifies paired_event_id (specifics) -------------------
+    verify_get = await make_intervals_request(
+        url=f"/activity/{new_activity_id}",
+        api_key=api_key,
+    )
+    if isinstance(verify_get, dict) and "error" in verify_get:
+        return (
+            f"Created activity {new_activity_id} but paired-event readback failed: "
+            f"{verify_get.get('message', 'Unknown error')}. "
+            f"The link from event {event_id} to activity {new_activity_id} may not have taken."
+        )
+    verify_dict: dict[str, Any] = {}
+    if isinstance(verify_get, list) and verify_get and isinstance(verify_get[0], dict):
+        verify_dict = verify_get[0]
+    elif isinstance(verify_get, dict):
+        verify_dict = verify_get
+    if not verify_dict:
+        return (
+            f"Error reading back created activity {new_activity_id} "
+            f"for paired_event_id verification."
+        )
+    got_pair = verify_dict.get("paired_event_id")
+    if got_pair != event_id:
+        return (
+            f"Error: paired_event_id mismatch on activity {new_activity_id}: "
+            f"sent {event_id!r}, got {got_pair!r}. "
+            f"The link from event {event_id} to activity may not have taken."
+        )
+
+    # --- 9. Single-shot enrich after POST + readback (D-08, D-09, D-12) -----
+    any_enrich_field = any(
+        v is not None
+        for v in (
+            discipline, indoor, session_focus,
+            top_grade_sent, top_grade_attempted,
+            sends, attempts, rpe,
+        )
+    )
+    if not any_enrich_field:
+        return (
+            f"Successfully completed session: created activity {new_activity_id} "
+            f"paired to event {event_id}."
+        )
+
+    enrich_result = await _enrich_impl(
+        new_activity_id,
+        discipline=discipline,
+        indoor=indoor,
+        session_focus=session_focus,
+        top_grade_sent=top_grade_sent,
+        top_grade_attempted=top_grade_attempted,
+        sends=sends,
+        attempts=attempts,
+        rpe=rpe,
+        override=False,
+        athlete_id=athlete_id_to_use,
+        api_key=api_key,
+        _skip_conflict_scan=True,  # D-12 — fresh-POST optimization
+    )
+    if not enrich_result.startswith("Successfully"):
+        # D-09 — POST landed but enrichment failed; do NOT delete the activity.
+        return (
+            f"Created activity {new_activity_id} (paired to event {event_id}) "
+            f"but enrichment failed:\n{enrich_result}\n\n"
+            f"Call enrich_activity_climbing(activity_id={new_activity_id}, "
+            f"override=True, ...) to retry adding climbing metadata."
+        )
+    return enrich_result
