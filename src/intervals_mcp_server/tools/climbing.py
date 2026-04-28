@@ -509,3 +509,220 @@ async def enrich_activity_climbing(  # pylint: disable=too-many-arguments,too-ma
         api_key=api_key,
         # _skip_conflict_scan defaults False — public tool always scans (D-12).
     )
+
+
+# ---------------------------------------------------------------------------
+# Title-template helper for create_climbing_activity (D-16).
+# ---------------------------------------------------------------------------
+
+_DISCIPLINE_HUMAN: dict[str, str] = {
+    "bouldering": "Bouldering",
+    "sport_lead": "Sport lead",
+    "top_rope": "Top rope",
+    "trad": "Trad",
+}
+
+
+def _build_default_name(date: str, discipline: str | None) -> str:
+    """Build the default activity name when the user did not supply one (D-16).
+
+    - With discipline: 'Climbing — {Discipline} — {date}' (e.g., 'Climbing — Bouldering — 2026-04-27')
+    - Without discipline: 'Climbing — {date}'
+
+    Discipline values are mapped to human-readable form via _DISCIPLINE_HUMAN
+    so enum-style 'sport_lead' does not appear verbatim in the Intervals.icu UI.
+    Unknown discipline values fall back to the no-discipline template (no crash).
+    """
+    if discipline and discipline in _DISCIPLINE_HUMAN:
+        return f"Climbing — {_DISCIPLINE_HUMAN[discipline]} — {date}"
+    return f"Climbing — {date}"
+
+
+@mcp.tool()
+async def create_climbing_activity(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-return-statements,too-many-branches,too-many-locals,too-many-statements
+    date: str,
+    duration_minutes: int,
+    name: str | None = None,
+    discipline: str | None = None,
+    indoor: bool | None = None,
+    session_focus: str | None = None,
+    top_grade_sent: str | None = None,
+    top_grade_attempted: str | None = None,
+    sends: int | None = None,
+    attempts: int | None = None,
+    rpe: int | None = None,
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+) -> str:
+    """Create a climbing activity from scratch on Intervals.icu (CLIMB-02).
+
+    Use this tool when the user climbed without a Garmin watch and without
+    a prior planned calendar event. For Garmin-synced activities use
+    `enrich_activity_climbing`. For completing a planned event from the
+    calendar use `complete_climbing_session`.
+
+    Before POSTing, the tool runs a duplicate guard (CLIMB-09): it GETs
+    activities for `date` and refuses with the existing activity id(s) if a
+    `WeightTraining` activity is already present that day. This prevents
+    accidental duplicates on MCP reconnect or LLM retry.
+
+    Activity type is hardcoded to `WeightTraining` — Phase 1 spike
+    confirmed this works for climbing on Intervals.icu and feeds rpeTSS.
+    Generic non-climbing manual activities are out of scope for v1.
+
+    `duration_minutes` is converted internally to `moving_time` (seconds);
+    pass minutes ('how many minutes did you climb?'), not seconds.
+
+    `name` defaults to a discipline-aware template:
+      - With discipline: 'Climbing — Bouldering — 2026-04-27'
+      - Without discipline: 'Climbing — 2026-04-27'
+      - User-supplied `name` is used verbatim.
+
+    If any climbing field (discipline, indoor, session_focus, top_grade_sent,
+    top_grade_attempted, sends, attempts, rpe) is supplied, after the POST
+    succeeds the tool calls into the same enrichment logic as
+    `enrich_activity_climbing` (validation, custom-field guard, split-PUT
+    of icu_rpe and custom fields, readback verification) — single-shot.
+    If only `date` and `duration_minutes` are supplied (plus optional name),
+    the tool returns success after the POST without writing climbing fields.
+
+    Atomicity (D-09): if the POST succeeds but the post-POST enrichment
+    fails, the activity is NOT deleted. The error names the new activity_id
+    and hints at `enrich_activity_climbing(activity_id={id}, override=True,
+    ...)` so the user (via Claude) can retry adding metadata.
+
+    Args:
+        date: Activity date in YYYY-MM-DD format. Required. The tool
+            constructs `start_date_local` as f'{date}T00:00:00' (local
+            midnight, no timezone) — never derived from system time
+            (Pitfall #4).
+        duration_minutes: Total climbing time in minutes. Required.
+            Converted to seconds for the API.
+        name: Optional activity title; defaults to a discipline-aware
+            template if absent.
+        discipline: bouldering / sport_lead / top_rope / trad.
+        indoor: True for gym, False for outdoors.
+        session_focus: power / endurance / technique / projecting / mileage.
+        top_grade_sent: Hardest grade sent (Font/French as appropriate).
+        top_grade_attempted: Hardest grade attempted.
+        sends: Total successful sends.
+        attempts: Total attempts (including sends).
+        rpe: Rate of Perceived Exertion (1-10), written to native icu_rpe.
+        athlete_id: Optional athlete ID (falls back to ATHLETE_ID env).
+        api_key: Optional API key (falls back to API_KEY env).
+
+    Returns:
+        Success string ('Successfully created activity {id} on {date}.' or
+        the enriched success from `_enrich_impl` when climbing fields were
+        supplied), OR an error string naming the failure path
+        (duplicate-guard hit / POST error / enrichment-fail-after-POST).
+    """
+    # --- 1. resolve_athlete_id (D-22 carry-forward) -------------------------
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    # --- 2. Duplicate guard (CLIMB-09 / Pitfall #1 / D-01..D-04) ------------
+    dup_params: dict[str, Any] = {"oldest": date, "newest": date}
+    dup_result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/activities",
+        api_key=api_key,
+        params=dup_params,
+    )
+    if isinstance(dup_result, dict) and "error" in dup_result:
+        return (
+            f"Error checking for duplicate activities: "
+            f"{dup_result.get('message', 'Unknown error')}"
+        )
+
+    matches: list[dict[str, Any]] = []
+    if isinstance(dup_result, list):
+        for activity in dup_result:
+            if not isinstance(activity, dict):
+                continue
+            if activity.get("type") != "WeightTraining":
+                continue
+            sdl = activity.get("start_date_local") or ""
+            if isinstance(sdl, str) and sdl.startswith(date):
+                matches.append(activity)
+
+    if matches:
+        # D-02 / D-04 — refuse with all matches; Claude reads the list and decides.
+        lines = [
+            f"Error: a WeightTraining activity already exists on {date}; "
+            f"refusing to create a duplicate.",
+            "Matching activities:",
+        ]
+        for a in matches:
+            lines.append(
+                f'  {a.get("id")} — "{a.get("name", "Unnamed")}" ({a.get("start_date_local")})'
+            )
+        lines.append(
+            "Call enrich_activity_climbing(activity_id=..., ...) to add "
+            "climbing metadata to an existing activity."
+        )
+        return "\n".join(lines)
+
+    # --- 3. Build POST body (D-13..D-17) ------------------------------------
+    # Pitfall #4 / D-17 — start_date_local is built from user-supplied date,
+    # NEVER from datetime.utcnow() or any system clock. Format matches
+    # events.py::_prepare_event_data.
+    activity_name = name if name is not None else _build_default_name(date, discipline)
+    create_body: dict[str, Any] = {
+        "start_date_local": f"{date}T00:00:00",
+        "type": "WeightTraining",            # D-15 — hardcoded for v1 climbing
+        "name": activity_name,
+        "moving_time": duration_minutes * 60,  # D-14 — minutes → seconds
+    }
+
+    # --- 4. POST manual activity --------------------------------------------
+    create_resp = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/activities/manual",
+        api_key=api_key,
+        data=create_body,
+        method="POST",
+    )
+    if isinstance(create_resp, dict) and "error" in create_resp:
+        # D-10 — POST is atomic; surface the API error verbatim.
+        return f"Error creating activity: {create_resp.get('message', 'Unknown error')}"
+    if not isinstance(create_resp, dict) or not create_resp.get("id"):
+        return f"Error: unexpected response from activity create: {create_resp!r}"
+    new_activity_id = str(create_resp["id"])
+
+    # --- 5. Single-shot enrich after POST (D-08, D-09, D-12) ----------------
+    any_enrich_field = any(
+        v is not None
+        for v in (
+            discipline, indoor, session_focus,
+            top_grade_sent, top_grade_attempted,
+            sends, attempts, rpe,
+        )
+    )
+    if not any_enrich_field:
+        # No climbing metadata supplied — return the create-only success.
+        return f"Successfully created activity {new_activity_id} on {date}."
+
+    enrich_result = await _enrich_impl(
+        new_activity_id,
+        discipline=discipline,
+        indoor=indoor,
+        session_focus=session_focus,
+        top_grade_sent=top_grade_sent,
+        top_grade_attempted=top_grade_attempted,
+        sends=sends,
+        attempts=attempts,
+        rpe=rpe,
+        override=False,                # fresh activity has no prior values
+        athlete_id=athlete_id_to_use,
+        api_key=api_key,
+        _skip_conflict_scan=True,      # D-12 — fresh-POST optimization
+    )
+    if not enrich_result.startswith("Successfully"):
+        # D-09 — POST landed but enrichment failed; do NOT delete the activity.
+        return (
+            f"Created activity {new_activity_id} but enrichment failed:\n"
+            f"{enrich_result}\n\n"
+            f"Call enrich_activity_climbing(activity_id={new_activity_id}, "
+            f"override=True, ...) to retry adding climbing metadata."
+        )
+    return enrich_result
