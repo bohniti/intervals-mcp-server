@@ -108,6 +108,270 @@ async def _verify_custom_fields_setup_impl(
     return ok, missing, human_message
 
 
+async def _enrich_impl(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-return-statements,too-many-branches,too-many-locals,too-many-statements
+    activity_id: str,
+    *,
+    discipline: str | None = None,
+    indoor: bool | None = None,
+    session_focus: str | None = None,
+    top_grade_sent: str | None = None,
+    top_grade_attempted: str | None = None,
+    sends: int | None = None,
+    attempts: int | None = None,
+    rpe: int | None = None,
+    override: bool = False,
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+    _skip_conflict_scan: bool = False,
+) -> str:
+    """Internal climbing-enrichment helper used by both the public tool and the
+    Phase 3 create/complete tools. See `enrich_activity_climbing` for the
+    public docstring covering behavior; the only structural difference is the
+    `_skip_conflict_scan` flag (D-12) which short-circuits the pre-PUT GET +
+    conflict-scan + override-audit when called immediately after a POST that
+    just produced a fresh activity with no prior values.
+    """
+    # --- 1. At-least-one-supplied (D-12) ------------------------------------
+    climbing_fields = (
+        discipline,
+        indoor,
+        session_focus,
+        top_grade_sent,
+        top_grade_attempted,
+        sends,
+        attempts,
+        rpe,
+    )
+    if all(v is None for v in climbing_fields):
+        return (
+            "Error: nothing to write — at least one climbing field or rpe "
+            "must be supplied."
+        )
+
+    # --- 2. resolve_athlete_id ----------------------------------------------
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    # --- 3. Grade↔discipline coupling + grade validation (D-12 / D-13) ------
+    disc_enum: Discipline | None = None
+    if discipline is not None:
+        try:
+            disc_enum = Discipline(discipline)
+        except ValueError:
+            return (
+                f"Error: unknown discipline {discipline!r}; expected one of "
+                f"{[d.value for d in Discipline]}."
+            )
+
+    if top_grade_sent is not None or top_grade_attempted is not None:
+        if disc_enum is None:
+            return (
+                "Error: discipline must be supplied when a grade is set "
+                "(grade validation depends on it)."
+            )
+        for grade in (top_grade_sent, top_grade_attempted):
+            if grade is not None:
+                try:
+                    validate_grade(grade, disc_enum)
+                except ValueError as exc:
+                    return f"Error: {exc}"
+
+    # --- 4. session_focus enum check ----------------------------------------
+    if session_focus is not None:
+        try:
+            SessionFocus(session_focus)
+        except ValueError:
+            return (
+                f"Error: unknown session_focus {session_focus!r}; expected one of "
+                f"{[f.value for f in SessionFocus]}."
+            )
+
+    # --- 5. rpe range check (D-12 / CLIMB-07) -------------------------------
+    if rpe is not None and not 1 <= rpe <= 10:
+        return f"Error: rpe={rpe} out of range; expected 1..10."
+
+    # --- 6. Conditional verify-fields guard (D-20 / CLIMB-10) ---------------
+    custom_field_supplied = any(
+        v is not None
+        for v in (
+            discipline,
+            indoor,
+            session_focus,
+            top_grade_sent,
+            top_grade_attempted,
+            sends,
+            attempts,
+        )
+    )
+    if custom_field_supplied:
+        ok, _missing, human_message = await _verify_custom_fields_setup_impl(
+            athlete_id_to_use, api_key
+        )
+        if not ok:
+            return human_message
+    # RPE-only writes skip this guard — icu_rpe is native, not a user-defined
+    # custom field (D-21 carry-forward).
+
+    # --- 7. GET activity (conflict scan) (D-14) -----------------------------
+    pre: dict[str, Any] = {}
+    if not _skip_conflict_scan:
+        pre_get = await make_intervals_request(
+            url=f"/activity/{activity_id}",
+            api_key=api_key,
+        )
+        if isinstance(pre_get, dict) and "error" in pre_get:
+            return (
+                f"Error fetching activity for conflict scan: "
+                f"{pre_get.get('message', 'Unknown error')}"
+            )
+        if isinstance(pre_get, list) and pre_get:
+            pre = pre_get[0] if isinstance(pre_get[0], dict) else {}
+        elif isinstance(pre_get, dict):
+            pre = pre_get
+        if not pre:
+            return f"Error: activity {activity_id} not found."
+
+    # --- 8. Build supplied pairs (API field name → sent value) --------------
+    # `rpe` maps to API name `icu_rpe`. All other supplied params keep their name.
+    supplied_pairs: dict[str, Any] = {}
+    if discipline is not None:
+        supplied_pairs["discipline"] = discipline
+    if indoor is not None:
+        supplied_pairs["indoor"] = indoor
+    if session_focus is not None:
+        supplied_pairs["session_focus"] = session_focus
+    if top_grade_sent is not None:
+        supplied_pairs["top_grade_sent"] = top_grade_sent
+    if top_grade_attempted is not None:
+        supplied_pairs["top_grade_attempted"] = top_grade_attempted
+    if sends is not None:
+        supplied_pairs["sends"] = sends
+    if attempts is not None:
+        supplied_pairs["attempts"] = attempts
+    if rpe is not None:
+        supplied_pairs["icu_rpe"] = rpe
+
+    # --- 9. Conflict scan (D-14) --------------------------------------------
+    conflicts: list[tuple[str, Any, Any]] = []
+    for api_name, sent_value in supplied_pairs.items():
+        existing = pre.get(api_name)
+        if existing is not None and existing != sent_value:
+            conflicts.append((api_name, existing, sent_value))
+
+    if not _skip_conflict_scan and conflicts and not override:
+        lines = [
+            f"Error: activity {activity_id} already has values for fields below.",
+            "Pass override=True to overwrite (an audit trail will be written).",
+            "Conflicting fields:",
+        ]
+        for name, existing_val, sent in conflicts:
+            lines.append(f"  {name}: {existing_val!r} (already set; sent: {sent!r})")
+        return "\n".join(lines)
+
+    # --- 10. Audit on override (D-14 / Pitfall #10) -------------------------
+    if not _skip_conflict_scan and conflicts and override:
+        parts = [f"{name}: {old}→{new}" for name, old, new in conflicts]
+        content = "[enrich override] " + ", ".join(parts) + " (prior values preserved here)"
+        await add_activity_message(
+            activity_id=activity_id,
+            content=content,
+            api_key=api_key,
+        )
+        # Audit is fire-and-forget; downstream readback still verifies the write.
+
+    # --- 11. PUT writes (D-16 — branch locked by Task 0) --------------------
+    # D-16 path: SPLIT-PUT (per 02-SPIKE-FINDINGS.md)
+    # Send icu_rpe first (separate PUT) and custom fields second (top-level
+    # keys via PUT /activity/{id}). Custom-field shape is the working
+    # hypothesis per 02-SPIKE-FINDINGS.md "Activity custom-field PUT shape" —
+    # the API accepted top-level keys structurally (422 "Unknown custom field
+    # [<key>]" indicates schemas need to be set up by the user; the body
+    # envelope is correct).
+    if rpe is not None:
+        rpe_result = await make_intervals_request(
+            url=f"/activity/{activity_id}",
+            api_key=api_key,
+            data={"icu_rpe": rpe},
+            method="PUT",
+        )
+        if isinstance(rpe_result, dict) and "error" in rpe_result:
+            return (
+                f"Error writing icu_rpe: "
+                f"{rpe_result.get('message', 'Unknown error')}"
+            )
+    if custom_field_supplied:
+        cf_body = {k: v for k, v in supplied_pairs.items() if k != "icu_rpe"}
+        cf_result = await make_intervals_request(
+            url=f"/activity/{activity_id}",
+            api_key=api_key,
+            data=cf_body,
+            method="PUT",
+        )
+        if isinstance(cf_result, dict) and "error" in cf_result:
+            # Partial-failure error per D-16 (I-03 fix: single conditional).
+            landed = f"icu_rpe={rpe}" if rpe is not None else "nothing"
+            return (
+                f"Error: partial enrichment — icu_rpe wrote successfully but "
+                f"custom-field write failed: {cf_result.get('message', 'Unknown error')}. "
+                f"Activity {activity_id} now has {landed} but no climbing metadata."
+            )
+
+    # --- 12. Readback (D-15) ------------------------------------------------
+    post_get = await make_intervals_request(
+        url=f"/activity/{activity_id}",
+        api_key=api_key,
+    )
+    if isinstance(post_get, dict) and "error" in post_get:
+        return (
+            f"Error reading back activity after enrichment: "
+            f"{post_get.get('message', 'Unknown error')}"
+        )
+    post: dict[str, Any]
+    if isinstance(post_get, list) and post_get:
+        post = post_get[0] if isinstance(post_get[0], dict) else {}
+    elif isinstance(post_get, dict):
+        post = post_get
+    else:
+        post = {}
+    if not post:
+        return f"Error: readback failed — activity {activity_id} not found after PUT."
+
+    # --- 13/14. Per-field equality (supplied only) + README pointer (D-15) -
+    custom_field_api_names = {
+        "discipline",
+        "indoor",
+        "session_focus",
+        "top_grade_sent",
+        "top_grade_attempted",
+        "sends",
+        "attempts",
+    }
+    mismatches: list[str] = []
+    cf_mismatched = False
+    for api_name, sent_value in supplied_pairs.items():
+        got = post.get(api_name)
+        if got != sent_value:
+            mismatches.append(f"  {api_name}: sent {sent_value!r}, got {got!r}")
+            if api_name in custom_field_api_names:
+                cf_mismatched = True
+
+    if mismatches:
+        msg = (
+            f"Error: enrichment fields did not roundtrip on activity {activity_id}:\n"
+            + "\n".join(mismatches)
+        )
+        if cf_mismatched:
+            msg += "\n\n" + _README_POINTER
+        return msg
+
+    # --- 15. Success --------------------------------------------------------
+    return (
+        f"Successfully enriched activity {activity_id}.\n\n"
+        + format_climbing_activity(post)
+    )
+
+
 @mcp.tool()
 async def verify_custom_fields_setup(
     athlete_id: str | None = None,
@@ -230,243 +494,18 @@ async def enrich_activity_climbing(  # pylint: disable=too-many-arguments,too-ma
         string naming the failure path (validation / verify-fields /
         re-enrichment conflict / API error / readback mismatch).
     """
-    # --- 1. At-least-one-supplied (D-12) ------------------------------------
-    climbing_fields = (
-        discipline,
-        indoor,
-        session_focus,
-        top_grade_sent,
-        top_grade_attempted,
-        sends,
-        attempts,
-        rpe,
-    )
-    if all(v is None for v in climbing_fields):
-        return (
-            "Error: nothing to write — at least one climbing field or rpe "
-            "must be supplied."
-        )
-
-    # --- 2. resolve_athlete_id ----------------------------------------------
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
-    if error_msg:
-        return error_msg
-
-    # --- 3. Grade↔discipline coupling + grade validation (D-12 / D-13) ------
-    disc_enum: Discipline | None = None
-    if discipline is not None:
-        try:
-            disc_enum = Discipline(discipline)
-        except ValueError:
-            return (
-                f"Error: unknown discipline {discipline!r}; expected one of "
-                f"{[d.value for d in Discipline]}."
-            )
-
-    if top_grade_sent is not None or top_grade_attempted is not None:
-        if disc_enum is None:
-            return (
-                "Error: discipline must be supplied when a grade is set "
-                "(grade validation depends on it)."
-            )
-        for grade in (top_grade_sent, top_grade_attempted):
-            if grade is not None:
-                try:
-                    validate_grade(grade, disc_enum)
-                except ValueError as exc:
-                    return f"Error: {exc}"
-
-    # --- 4. session_focus enum check ----------------------------------------
-    if session_focus is not None:
-        try:
-            SessionFocus(session_focus)
-        except ValueError:
-            return (
-                f"Error: unknown session_focus {session_focus!r}; expected one of "
-                f"{[f.value for f in SessionFocus]}."
-            )
-
-    # --- 5. rpe range check (D-12 / CLIMB-07) -------------------------------
-    if rpe is not None and not 1 <= rpe <= 10:
-        return f"Error: rpe={rpe} out of range; expected 1..10."
-
-    # --- 6. Conditional verify-fields guard (D-20 / CLIMB-10) ---------------
-    custom_field_supplied = any(
-        v is not None
-        for v in (
-            discipline,
-            indoor,
-            session_focus,
-            top_grade_sent,
-            top_grade_attempted,
-            sends,
-            attempts,
-        )
-    )
-    if custom_field_supplied:
-        ok, _missing, human_message = await _verify_custom_fields_setup_impl(
-            athlete_id_to_use, api_key
-        )
-        if not ok:
-            return human_message
-    # RPE-only writes skip this guard — icu_rpe is native, not a user-defined
-    # custom field (D-21 carry-forward).
-
-    # --- 7. GET activity (conflict scan) (D-14) -----------------------------
-    pre_get = await make_intervals_request(
-        url=f"/activity/{activity_id}",
+    return await _enrich_impl(
+        activity_id,
+        discipline=discipline,
+        indoor=indoor,
+        session_focus=session_focus,
+        top_grade_sent=top_grade_sent,
+        top_grade_attempted=top_grade_attempted,
+        sends=sends,
+        attempts=attempts,
+        rpe=rpe,
+        override=override,
+        athlete_id=athlete_id,
         api_key=api_key,
-    )
-    if isinstance(pre_get, dict) and "error" in pre_get:
-        return (
-            f"Error fetching activity for conflict scan: "
-            f"{pre_get.get('message', 'Unknown error')}"
-        )
-    pre: dict[str, Any]
-    if isinstance(pre_get, list) and pre_get:
-        pre = pre_get[0] if isinstance(pre_get[0], dict) else {}
-    elif isinstance(pre_get, dict):
-        pre = pre_get
-    else:
-        pre = {}
-    if not pre:
-        return f"Error: activity {activity_id} not found."
-
-    # --- 8. Build supplied pairs (API field name → sent value) --------------
-    # `rpe` maps to API name `icu_rpe`. All other supplied params keep their name.
-    supplied_pairs: dict[str, Any] = {}
-    if discipline is not None:
-        supplied_pairs["discipline"] = discipline
-    if indoor is not None:
-        supplied_pairs["indoor"] = indoor
-    if session_focus is not None:
-        supplied_pairs["session_focus"] = session_focus
-    if top_grade_sent is not None:
-        supplied_pairs["top_grade_sent"] = top_grade_sent
-    if top_grade_attempted is not None:
-        supplied_pairs["top_grade_attempted"] = top_grade_attempted
-    if sends is not None:
-        supplied_pairs["sends"] = sends
-    if attempts is not None:
-        supplied_pairs["attempts"] = attempts
-    if rpe is not None:
-        supplied_pairs["icu_rpe"] = rpe
-
-    # --- 9. Conflict scan (D-14) --------------------------------------------
-    conflicts: list[tuple[str, Any, Any]] = []
-    for api_name, sent_value in supplied_pairs.items():
-        existing = pre.get(api_name)
-        if existing is not None and existing != sent_value:
-            conflicts.append((api_name, existing, sent_value))
-
-    if conflicts and not override:
-        lines = [
-            f"Error: activity {activity_id} already has values for fields below.",
-            "Pass override=True to overwrite (an audit trail will be written).",
-            "Conflicting fields:",
-        ]
-        for name, existing_val, sent in conflicts:
-            lines.append(f"  {name}: {existing_val!r} (already set; sent: {sent!r})")
-        return "\n".join(lines)
-
-    # --- 10. Audit on override (D-14 / Pitfall #10) -------------------------
-    if conflicts and override:
-        parts = [f"{name}: {old}→{new}" for name, old, new in conflicts]
-        content = "[enrich override] " + ", ".join(parts) + " (prior values preserved here)"
-        await add_activity_message(
-            activity_id=activity_id,
-            content=content,
-            api_key=api_key,
-        )
-        # Audit is fire-and-forget; downstream readback still verifies the write.
-
-    # --- 11. PUT writes (D-16 — branch locked by Task 0) --------------------
-    # D-16 path: SPLIT-PUT (per 02-SPIKE-FINDINGS.md)
-    # Send icu_rpe first (separate PUT) and custom fields second (top-level
-    # keys via PUT /activity/{id}). Custom-field shape is the working
-    # hypothesis per 02-SPIKE-FINDINGS.md "Activity custom-field PUT shape" —
-    # the API accepted top-level keys structurally (422 "Unknown custom field
-    # [<key>]" indicates schemas need to be set up by the user; the body
-    # envelope is correct).
-    if rpe is not None:
-        rpe_result = await make_intervals_request(
-            url=f"/activity/{activity_id}",
-            api_key=api_key,
-            data={"icu_rpe": rpe},
-            method="PUT",
-        )
-        if isinstance(rpe_result, dict) and "error" in rpe_result:
-            return (
-                f"Error writing icu_rpe: "
-                f"{rpe_result.get('message', 'Unknown error')}"
-            )
-    if custom_field_supplied:
-        cf_body = {k: v for k, v in supplied_pairs.items() if k != "icu_rpe"}
-        cf_result = await make_intervals_request(
-            url=f"/activity/{activity_id}",
-            api_key=api_key,
-            data=cf_body,
-            method="PUT",
-        )
-        if isinstance(cf_result, dict) and "error" in cf_result:
-            # Partial-failure error per D-16 (I-03 fix: single conditional).
-            landed = f"icu_rpe={rpe}" if rpe is not None else "nothing"
-            return (
-                f"Error: partial enrichment — icu_rpe wrote successfully but "
-                f"custom-field write failed: {cf_result.get('message', 'Unknown error')}. "
-                f"Activity {activity_id} now has {landed} but no climbing metadata."
-            )
-
-    # --- 12. Readback (D-15) ------------------------------------------------
-    post_get = await make_intervals_request(
-        url=f"/activity/{activity_id}",
-        api_key=api_key,
-    )
-    if isinstance(post_get, dict) and "error" in post_get:
-        return (
-            f"Error reading back activity after enrichment: "
-            f"{post_get.get('message', 'Unknown error')}"
-        )
-    post: dict[str, Any]
-    if isinstance(post_get, list) and post_get:
-        post = post_get[0] if isinstance(post_get[0], dict) else {}
-    elif isinstance(post_get, dict):
-        post = post_get
-    else:
-        post = {}
-    if not post:
-        return f"Error: readback failed — activity {activity_id} not found after PUT."
-
-    # --- 13/14. Per-field equality (supplied only) + README pointer (D-15) -
-    custom_field_api_names = {
-        "discipline",
-        "indoor",
-        "session_focus",
-        "top_grade_sent",
-        "top_grade_attempted",
-        "sends",
-        "attempts",
-    }
-    mismatches: list[str] = []
-    cf_mismatched = False
-    for api_name, sent_value in supplied_pairs.items():
-        got = post.get(api_name)
-        if got != sent_value:
-            mismatches.append(f"  {api_name}: sent {sent_value!r}, got {got!r}")
-            if api_name in custom_field_api_names:
-                cf_mismatched = True
-
-    if mismatches:
-        msg = (
-            f"Error: enrichment fields did not roundtrip on activity {activity_id}:\n"
-            + "\n".join(mismatches)
-        )
-        if cf_mismatched:
-            msg += "\n\n" + _README_POINTER
-        return msg
-
-    # --- 15. Success --------------------------------------------------------
-    return (
-        f"Successfully enriched activity {activity_id}.\n\n"
-        + format_climbing_activity(post)
+        # _skip_conflict_scan defaults False — public tool always scans (D-12).
     )
