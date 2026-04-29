@@ -81,7 +81,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The report incorporates recent sleep, soreness, fatigue, HRV/RHR from the last 7 days of wellness entries alongside the fitness metrics
   3. When more than 30% of activities in the recent window lack `icu_rpe`, the report includes an explicit data-quality warning naming it as a reason the readiness signal may be noisy
   4. The formatted report is 400–600 tokens (verified by token count) so the LLM retains headroom to reason on top of the data
-**Plans**: TBD
+**Plans**: 3 plans
+**Plan list**:
+- [ ] 04-01-PLAN.md — utils/status.py: TSB_BANDS constants + window/RPE constants + tsb_band + compute_rpe_coverage + format_today_section / format_weekly_section / format_longterm_section / format_status_report (pure leaf module)
+- [ ] 04-02-PLAN.md — tools/status.py: get_training_status MCP tool (two GETs, walk-back, RPE flag) + server.py wiring
+- [ ] 04-03-PLAN.md — tests/test_status.py: utils unit tests + tool integration tests + tiktoken token-budget tests (STAT-04) + pyproject.toml dev-extras update
 **UI hint**: no
 
 ### Phase 5: Server Wiring and Acceptance
