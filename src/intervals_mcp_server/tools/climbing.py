@@ -9,6 +9,7 @@ with discipline-aware grade validation, default-deny re-enrichment,
 and readback verification.
 """
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
@@ -61,10 +62,22 @@ async def _verify_custom_fields_setup_impl(
     """
     required = set(CUSTOM_FIELD_KEYS.keys())
 
+    # Intervals.icu /activities requires `oldest` (and accepts `newest`) — see
+    # other call sites in this module. Use a one-year readback window: wide
+    # enough to surface custom-field-bearing activities for any active athlete,
+    # narrow enough to keep response size bounded.
+    today = datetime.now(timezone.utc).date()
+    readback_oldest = (today - timedelta(days=365)).isoformat()
+    readback_newest = today.isoformat()
+
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/activities",
         api_key=api_key,
-        params={"limit": _READBACK_ACTIVITY_LIMIT},
+        params={
+            "oldest": readback_oldest,
+            "newest": readback_newest,
+            "limit": _READBACK_ACTIVITY_LIMIT,
+        },
     )
 
     if isinstance(result, dict) and "error" in result:
