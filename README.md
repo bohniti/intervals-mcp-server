@@ -116,6 +116,60 @@ verify_custom_fields_setup()
 If any required field is missing, the climbing write tools (Phase 2+) will
 refuse to run against your account until the missing fields are added.
 
+## Climbing tools
+
+Once the custom fields are in place, the milestone ships five tools you call from Claude Desktop. Each tool's full parameter list lives in its docstring; the examples below are the most common shape.
+
+### `write_wellness_entry`
+
+Log a wellness entry for an athlete on a given date with any subset of sleep, soreness, fatigue, motivation, stress, HRV, and resting HR fields. Fields not supplied use upsert semantics — they do not clobber values already logged for that day.
+
+Use it when you want to record subjective wellness for a date Garmin / Whoop / Oura did not auto-sync, or to add fields the wearable did not capture.
+
+```text
+write_wellness_entry(date="2026-04-28", sleep_hours=7.5, soreness=2)
+```
+
+### `enrich_activity_climbing`
+
+Enrich an existing Intervals.icu activity (e.g. a Garmin-synced session) with climbing metadata and RPE — discipline, indoor/outdoor, session focus, grades, sends/attempts — and write the native `icu_rpe` field.
+
+Use it when an activity is already on Intervals.icu (auto-imported or hand-created elsewhere) and you want to add climbing context after the fact.
+
+```text
+enrich_activity_climbing(activity_id="i12345", discipline="bouldering", indoor=True, top_grade_sent="6A+", sends=4, attempts=7, rpe=6)
+```
+
+### `create_climbing_activity`
+
+Create a climbing activity from scratch on Intervals.icu — date, duration, title, plus optional climbing fields. The tool runs a duplicate guard (date + type) before posting so reconnects and retries do not double up.
+
+Use it when there is no Garmin sync and no planned event for the session — the most common "I just climbed, log it" path.
+
+```text
+create_climbing_activity(date="2026-04-28", duration_minutes=90, discipline="sport_lead", indoor=False, top_grade_sent="6c+", rpe=7)
+```
+
+### `complete_climbing_session`
+
+Complete a planned climbing event by creating a linked activity. The planned event stays on the calendar (with `paired_event_id` linkage) so weekly-plan adherence remains visible.
+
+Use it when you scheduled a session in the Intervals.icu calendar and want to mark it done with the actual climbing metadata.
+
+```text
+complete_climbing_session(event_id="i98765", discipline="bouldering", session_focus="projecting", rpe=8)
+```
+
+### `get_training_status`
+
+Return a plain-text training-status report blending CTL/ATL/TSB load metrics with recent sleep, soreness, fatigue, HRV/RHR — plus a data-quality flag if too many recent activities lack RPE.
+
+Use it when you want a single "how should I train today?" answer without juggling separate dashboards.
+
+```text
+get_training_status()
+```
+
 ## Updating
 
 This project is actively developed, with new features and fixes added regularly. To stay up to date, follow these steps:
