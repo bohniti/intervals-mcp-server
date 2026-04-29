@@ -24,6 +24,7 @@ Finish a climbing session → tell Claude → in one short conversation a comple
 - ✓ Single HTTP boundary through `make_intervals_request()` with auth, retry, error mapping — existing (`src/intervals_mcp_server/api/client.py`)
 - ✓ Mark a planned event as done — creates a **linked activity**; the planned event stays on the calendar — Validated in Phase 3 (`complete_climbing_session` in `src/intervals_mcp_server/tools/climbing.py`)
 - ✓ Create a climbing activity from scratch (fully manual entry, no watch) — Validated in Phase 3 (`create_climbing_activity` in `src/intervals_mcp_server/tools/climbing.py`)
+- ✓ Status tool — one report covering **today's readiness**, **weekly load review**, and **long-term trend**, fed by CTL/ATL/TSB + sleep + subjective soreness/fatigue + HRV/RHR — Validated in Phase 4 (`get_training_status` in `src/intervals_mcp_server/tools/status.py`)
 
 ### Active
 
@@ -33,7 +34,6 @@ Finish a climbing session → tell Claude → in one short conversation a comple
 - [ ] Capture structured climbing fields on completion: **discipline** (bouldering / sport lead / top-rope / trad, gym vs outdoor), **volume & grades** (sends + attempts in Font for boulders, French sport for routes), **session focus** (power / endurance / technique / projecting / mileage)
 - [ ] Write RPE (1–10) to the native `icu_rpe` field on the activity
 - [ ] Write wellness entries conversationally (sleep, soreness, HRV, RHR, subjective metrics)
-- [ ] Status tool — one report covering **today's readiness**, **weekly load review**, and **long-term trend**, fed by CTL/ATL/TSB + sleep + subjective soreness/fatigue + HRV/RHR
 
 ### Out of Scope
 
@@ -107,4 +107,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-28 — Phase 3 (Activity Creation and Session Completion) complete: create_climbing_activity tool with duplicate-guard GET-before-POST + optional single-shot enrichment via _enrich_impl (CLIMB-02, CLIMB-09), complete_climbing_session tool implementing event GET → already-paired check → duplicate guard → POST with explicit paired_event_id → readback verification (CLIMB-01, CLIMB-09), and refactor of enrich_activity_climbing into a private _enrich_impl(_skip_conflict_scan=False) helper that public callers and the new creation tools share. 147/147 tests pass; ruff + mypy clean. Phase 2 still trailing live custom-field roundtrip on SETUP-01 (tracked in 02-HUMAN-UAT.md). Phase 4 (Training Status Report) is next.*
+*Last updated: 2026-04-29 — Phase 4 (Training Status Report) complete: `get_training_status` MCP tool returns a single sub-600-token report blending today's readiness (TSB band + verbal label + 7-day wellness blend), weekly load review (CTL/ATL trend), and long-term trend (42-day deltas + means), with an RPE data-quality flag firing at >30% missing icu_rpe and small-sample suppression below 3 sessions. New leaf module `utils/status.py` houses constants + 4 pure formatters; new tool `tools/status.py` does the two reads via `make_intervals_request()` (wellness 42d, activities 14d) and the 7-day walk-back fallback per CONTEXT D-07. STAT-01..04 verified: 195/195 tests pass; ruff + mypy clean; full-data report renders at ~250 tokens (well under 600). Phase 5 (Server Wiring and Acceptance) is next.*
