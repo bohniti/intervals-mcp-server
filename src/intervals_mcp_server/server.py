@@ -38,6 +38,12 @@ Usage:
         - create_custom_item
         - update_custom_item
         - delete_custom_item
+        - verify_custom_fields_setup
+        - write_wellness_entry
+        - enrich_activity_climbing
+        - create_climbing_activity
+        - complete_climbing_session
+        - get_training_status
 
     See the README for more details on configuration and usage.
 """
