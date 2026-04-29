@@ -95,7 +95,12 @@ from intervals_mcp_server.tools.custom_items import (  # pylint: disable=wrong-i
     get_custom_items,
     update_custom_item,
 )
-from intervals_mcp_server.tools.climbing import verify_custom_fields_setup  # pylint: disable=wrong-import-position  # noqa: E402
+from intervals_mcp_server.tools.climbing import (  # pylint: disable=wrong-import-position  # noqa: E402
+    complete_climbing_session,
+    create_climbing_activity,
+    enrich_activity_climbing,
+    verify_custom_fields_setup,
+)
 from intervals_mcp_server.tools.status import get_training_status  # pylint: disable=wrong-import-position  # noqa: E402
 
 # Re-export make_intervals_request and httpx_client for backward compatibility
@@ -121,6 +126,10 @@ __all__ = [
     "update_custom_item",
     "delete_custom_item",
     "verify_custom_fields_setup",
+    "enrich_activity_climbing",
+    "create_climbing_activity",
+    "complete_climbing_session",
+    "write_wellness_entry",
     "get_training_status",
 ]
 
