@@ -99,10 +99,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. A smoke test of each new tool via Claude Desktop produces a non-error response against the live Intervals.icu account
 **Plans**: 5 plans
 **Plan list**:
-- [ ] 05-01-PLAN.md — server.py wiring: explicit named imports + __all__ entries for the four new tools + docstring refresh (D-01/D-02)
-- [ ] 05-02-PLAN.md — README refresh: intro paragraph (D-04) + new `## Climbing tools` section with five subsections (D-03)
-- [ ] 05-03-PLAN.md — tests/test_server_registration.py: structural drift gate asserting every milestone tool is registered with FastMCP (D-06/D-08)
-- [ ] 05-04-PLAN.md — scripts/smoke_phase5.py + 05-LIVE-SMOKE.md checklist + 05-SMOKE-FINDINGS.md skeleton (D-09/D-10/D-11)
+- [x] 05-01-PLAN.md — server.py wiring: explicit named imports + __all__ entries for the four new tools + docstring refresh (D-01/D-02)
+- [x] 05-02-PLAN.md — README refresh: intro paragraph (D-04) + new `## Climbing tools` section with five subsections (D-03)
+- [x] 05-03-PLAN.md — tests/test_server_registration.py: structural drift gate asserting every milestone tool is registered with FastMCP (D-06/D-08)
+- [x] 05-04-PLAN.md — scripts/smoke_phase5.py + 05-LIVE-SMOKE.md checklist + 05-SMOKE-FINDINGS.md skeleton (D-09/D-10/D-11)
 - [ ] 05-05-PLAN.md — Acceptance gate (Wave 2, non-autonomous): pytest + live smoke run + Claude Desktop checklist drive — confirms SC-1..SC-4
 **UI hint**: no
 
