@@ -25,7 +25,8 @@ class _KeyTracker(dict):
         return super().__getitem__(key)
 
     def __contains__(self, key: object) -> bool:
-        self.accessed.add(key)
+        if isinstance(key, str):
+            self.accessed.add(key)
         return super().__contains__(key)
 
 
@@ -292,11 +293,13 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
     Returns:
         A formatted string representation of the wellness entry.
     """
+    tracker: _KeyTracker | None = None
     if include_all_fields:
-        entries = _KeyTracker(entries)
+        tracker = _KeyTracker(entries)
         # Mark metadata keys so they don't appear in "Other Fields"
-        entries.get("date")
-        entries.get("updated")
+        tracker.get("date")
+        tracker.get("updated")
+        entries = tracker
 
     lines = ["Wellness Data:"]
     lines.append(f"Date: {entries.get('id', 'N/A')}")
@@ -354,8 +357,8 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
     if "locked" in entries:
         lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
 
-    if include_all_fields:
-        other_lines = _format_other_fields(entries, entries.accessed)
+    if include_all_fields and tracker is not None:
+        other_lines = _format_other_fields(entries, tracker.accessed)
         if other_lines:
             lines.append("")
             lines.append("Other Fields:")
