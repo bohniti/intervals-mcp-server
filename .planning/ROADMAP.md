@@ -83,9 +83,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. The formatted report is 400–600 tokens (verified by token count) so the LLM retains headroom to reason on top of the data
 **Plans**: 3 plans
 **Plan list**:
-- [ ] 04-01-PLAN.md — utils/status.py: TSB_BANDS constants + window/RPE constants + tsb_band + compute_rpe_coverage + format_today_section / format_weekly_section / format_longterm_section / format_status_report (pure leaf module)
-- [ ] 04-02-PLAN.md — tools/status.py: get_training_status MCP tool (two GETs, walk-back, RPE flag) + server.py wiring
-- [ ] 04-03-PLAN.md — tests/test_status.py: utils unit tests + tool integration tests + tiktoken token-budget tests (STAT-04) + pyproject.toml dev-extras update
+- [x] 04-01-PLAN.md — utils/status.py: TSB_BANDS constants + window/RPE constants + tsb_band + compute_rpe_coverage + format_today_section / format_weekly_section / format_longterm_section / format_status_report (pure leaf module)
+- [x] 04-02-PLAN.md — tools/status.py: get_training_status MCP tool (two GETs, walk-back, RPE flag) + server.py wiring
+- [x] 04-03-PLAN.md — tests/test_status.py: utils unit tests + tool integration tests + tiktoken token-budget tests (STAT-04) + pyproject.toml dev-extras update
 **UI hint**: no
 
 ### Phase 5: Server Wiring and Acceptance
