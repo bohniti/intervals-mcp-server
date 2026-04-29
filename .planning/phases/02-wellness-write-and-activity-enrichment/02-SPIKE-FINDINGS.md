@@ -32,7 +32,7 @@ This file is the canonical reference for Plans 02-02 (wellness ranges) and 02-04
     "write_response": {
       "error": true,
       "status_code": 422,
-      "message": "422 Unprocessable Content: The server couldn't process the request (invalid parameters or unsupported operation)."
+      "message": "422 Unprocessable Entity: The server couldn't process the request (invalid parameters or unsupported operation)."
     },
     "readback_partial_match_keys": [],
     "all_keys_roundtripped": false
@@ -58,7 +58,7 @@ This file is the canonical reference for Plans 02-02 (wellness ranges) and 02-04
     "write_response": {
       "error": true,
       "status_code": 405,
-      "message": "{\"timestamp\":\"2026-04-25T09:42:05.873+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i142762273\"}"
+      "message": "{\"timestamp\":\"2026-04-29T18:57:16.611+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i144140448\"}"
     },
     "readback_partial_match_keys": [],
     "all_keys_roundtripped": false
@@ -84,7 +84,7 @@ This file is the canonical reference for Plans 02-02 (wellness ranges) and 02-04
     "write_response": {
       "error": true,
       "status_code": 422,
-      "message": "422 Unprocessable Content: The server couldn't process the request (invalid parameters or unsupported operation)."
+      "message": "422 Unprocessable Entity: The server couldn't process the request (invalid parameters or unsupported operation)."
     },
     "readback_partial_match_keys": [],
     "all_keys_roundtripped": false
@@ -110,7 +110,7 @@ This file is the canonical reference for Plans 02-02 (wellness ranges) and 02-04
     "write_response": {
       "error": true,
       "status_code": 405,
-      "message": "{\"timestamp\":\"2026-04-25T09:42:09.515+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i142762273\"}"
+      "message": "{\"timestamp\":\"2026-04-29T18:57:20.171+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i144140448\"}"
     },
     "readback_partial_match_keys": [],
     "all_keys_roundtripped": false
@@ -136,7 +136,7 @@ This file is the canonical reference for Plans 02-02 (wellness ranges) and 02-04
     "write_response": {
       "error": true,
       "status_code": 422,
-      "message": "422 Unprocessable Content: The server couldn't process the request (invalid parameters or unsupported operation)."
+      "message": "422 Unprocessable Entity: The server couldn't process the request (invalid parameters or unsupported operation)."
     },
     "readback_partial_match_keys": [],
     "all_keys_roundtripped": false
@@ -162,7 +162,7 @@ This file is the canonical reference for Plans 02-02 (wellness ranges) and 02-04
     "write_response": {
       "error": true,
       "status_code": 405,
-      "message": "{\"timestamp\":\"2026-04-25T09:42:13.205+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i142762273\"}"
+      "message": "{\"timestamp\":\"2026-04-29T18:57:23.749+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i144140448\"}"
     },
     "readback_partial_match_keys": [],
     "all_keys_roundtripped": false
@@ -188,7 +188,7 @@ This file is the canonical reference for Plans 02-02 (wellness ranges) and 02-04
     "write_response": {
       "error": true,
       "status_code": 422,
-      "message": "422 Unprocessable Content: The server couldn't process the request (invalid parameters or unsupported operation)."
+      "message": "422 Unprocessable Entity: The server couldn't process the request (invalid parameters or unsupported operation)."
     },
     "readback_partial_match_keys": [],
     "all_keys_roundtripped": false
@@ -214,7 +214,7 @@ This file is the canonical reference for Plans 02-02 (wellness ranges) and 02-04
     "write_response": {
       "error": true,
       "status_code": 405,
-      "message": "{\"timestamp\":\"2026-04-25T09:42:16.858+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i142762273\"}"
+      "message": "{\"timestamp\":\"2026-04-29T18:57:27.323+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i144140448\"}"
     },
     "readback_partial_match_keys": [],
     "all_keys_roundtripped": false
@@ -285,7 +285,7 @@ await make_intervals_request(
         "icu_rpe": 6
       },
       "write_response": {
-        "id": "i142762273",
+        "id": "i144140448",
         "start_date_local": "2099-01-01T00:00:00",
         "type": "WeightTraining",
         "icu_ignore_time": false,
@@ -354,9 +354,9 @@ await make_intervals_request(
         "file_sport_index": 0,
         "file_type": null,
         "icu_athlete_id": "{athlete_id}",
-        "created": "2026-04-25T09:42:03.466+00:00",
-        "icu_sync_date": "2026-04-25T09:42:03.476+00:00",
-        "analyzed": "2026-04-25T09:42:03.476+00:00",
+        "created": "2026-04-29T18:57:14.250+00:00",
+        "icu_sync_date": "2026-04-29T18:57:14.259+00:00",
+        "analyzed": "2026-04-29T18:57:14.259+00:00",
         "icu_w_prime": null,
         "p_max": null,
         "threshold_pace": null,
@@ -495,7 +495,7 @@ await make_intervals_request(
       "icu_rpe": 6
     },
     "write_response": {
-      "id": "i142762273",
+      "id": "i144140448",
       "start_date_local": "2099-01-01T00:00:00",
       "type": "WeightTraining",
       "icu_ignore_time": false,
@@ -564,9 +564,9 @@ await make_intervals_request(
       "file_sport_index": 0,
       "file_type": null,
       "icu_athlete_id": "{athlete_id}",
-      "created": "2026-04-25T09:42:03.466+00:00",
-      "icu_sync_date": "2026-04-25T09:42:03.476+00:00",
-      "analyzed": "2026-04-25T09:42:03.476+00:00",
+      "created": "2026-04-29T18:57:14.250+00:00",
+      "icu_sync_date": "2026-04-29T18:57:14.259+00:00",
+      "analyzed": "2026-04-29T18:57:14.259+00:00",
       "icu_w_prime": null,
       "p_max": null,
       "threshold_pace": null,
@@ -716,7 +716,7 @@ await make_intervals_request(
       "write_response": {
         "error": true,
         "status_code": 422,
-        "message": "422 Unprocessable Content: The server couldn't process the request (invalid parameters or unsupported operation)."
+        "message": "422 Unprocessable Entity: The server couldn't process the request (invalid parameters or unsupported operation)."
       },
       "readback_partial_match_keys": [],
       "all_keys_roundtripped": false
@@ -742,7 +742,7 @@ await make_intervals_request(
       "write_response": {
         "error": true,
         "status_code": 405,
-        "message": "{\"timestamp\":\"2026-04-25T09:42:05.873+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i142762273\"}"
+        "message": "{\"timestamp\":\"2026-04-29T18:57:16.611+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i144140448\"}"
       },
       "readback_partial_match_keys": [],
       "all_keys_roundtripped": false
@@ -768,7 +768,7 @@ await make_intervals_request(
       "write_response": {
         "error": true,
         "status_code": 422,
-        "message": "422 Unprocessable Content: The server couldn't process the request (invalid parameters or unsupported operation)."
+        "message": "422 Unprocessable Entity: The server couldn't process the request (invalid parameters or unsupported operation)."
       },
       "readback_partial_match_keys": [],
       "all_keys_roundtripped": false
@@ -794,7 +794,7 @@ await make_intervals_request(
       "write_response": {
         "error": true,
         "status_code": 405,
-        "message": "{\"timestamp\":\"2026-04-25T09:42:09.515+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i142762273\"}"
+        "message": "{\"timestamp\":\"2026-04-29T18:57:20.171+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i144140448\"}"
       },
       "readback_partial_match_keys": [],
       "all_keys_roundtripped": false
@@ -820,7 +820,7 @@ await make_intervals_request(
       "write_response": {
         "error": true,
         "status_code": 422,
-        "message": "422 Unprocessable Content: The server couldn't process the request (invalid parameters or unsupported operation)."
+        "message": "422 Unprocessable Entity: The server couldn't process the request (invalid parameters or unsupported operation)."
       },
       "readback_partial_match_keys": [],
       "all_keys_roundtripped": false
@@ -846,7 +846,7 @@ await make_intervals_request(
       "write_response": {
         "error": true,
         "status_code": 405,
-        "message": "{\"timestamp\":\"2026-04-25T09:42:13.205+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i142762273\"}"
+        "message": "{\"timestamp\":\"2026-04-29T18:57:23.749+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i144140448\"}"
       },
       "readback_partial_match_keys": [],
       "all_keys_roundtripped": false
@@ -872,7 +872,7 @@ await make_intervals_request(
       "write_response": {
         "error": true,
         "status_code": 422,
-        "message": "422 Unprocessable Content: The server couldn't process the request (invalid parameters or unsupported operation)."
+        "message": "422 Unprocessable Entity: The server couldn't process the request (invalid parameters or unsupported operation)."
       },
       "readback_partial_match_keys": [],
       "all_keys_roundtripped": false
@@ -898,7 +898,7 @@ await make_intervals_request(
       "write_response": {
         "error": true,
         "status_code": 405,
-        "message": "{\"timestamp\":\"2026-04-25T09:42:16.858+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i142762273\"}"
+        "message": "{\"timestamp\":\"2026-04-29T18:57:27.323+00:00\",\"status\":405,\"error\":\"Method Not Allowed\",\"path\":\"/api/v1/activity/i144140448\"}"
       },
       "readback_partial_match_keys": [],
       "all_keys_roundtripped": false
@@ -929,7 +929,7 @@ await make_intervals_request(
   },
   "create_endpoint_template": "/athlete/{athlete_id}/activities/manual",
   "create_response": {
-    "id": "i142762273",
+    "id": "i144140448",
     "start_date_local": "2099-01-01T00:00:00",
     "type": "WeightTraining",
     "icu_ignore_time": false,
@@ -998,9 +998,9 @@ await make_intervals_request(
     "file_sport_index": 0,
     "file_type": null,
     "icu_athlete_id": "{athlete_id}",
-    "created": "2026-04-25T09:42:03.466+00:00",
-    "icu_sync_date": "2026-04-25T09:42:03.476+00:00",
-    "analyzed": "2026-04-25T09:42:03.476+00:00",
+    "created": "2026-04-29T18:57:14.250+00:00",
+    "icu_sync_date": "2026-04-29T18:57:14.259+00:00",
+    "analyzed": "2026-04-29T18:57:14.259+00:00",
     "icu_w_prime": null,
     "p_max": null,
     "threshold_pace": null,
@@ -1124,7 +1124,7 @@ await make_intervals_request(
         "icu_rpe": 6
       },
       "write_response": {
-        "id": "i142762273",
+        "id": "i144140448",
         "start_date_local": "2099-01-01T00:00:00",
         "type": "WeightTraining",
         "icu_ignore_time": false,
@@ -1193,9 +1193,9 @@ await make_intervals_request(
         "file_sport_index": 0,
         "file_type": null,
         "icu_athlete_id": "{athlete_id}",
-        "created": "2026-04-25T09:42:03.466+00:00",
-        "icu_sync_date": "2026-04-25T09:42:03.476+00:00",
-        "analyzed": "2026-04-25T09:42:03.476+00:00",
+        "created": "2026-04-29T18:57:14.250+00:00",
+        "icu_sync_date": "2026-04-29T18:57:14.259+00:00",
+        "analyzed": "2026-04-29T18:57:14.259+00:00",
         "icu_w_prime": null,
         "p_max": null,
         "threshold_pace": null,
@@ -1334,7 +1334,7 @@ await make_intervals_request(
       "icu_rpe": 6
     },
     "write_response": {
-      "id": "i142762273",
+      "id": "i144140448",
       "start_date_local": "2099-01-01T00:00:00",
       "type": "WeightTraining",
       "icu_ignore_time": false,
@@ -1403,9 +1403,9 @@ await make_intervals_request(
       "file_sport_index": 0,
       "file_type": null,
       "icu_athlete_id": "{athlete_id}",
-      "created": "2026-04-25T09:42:03.466+00:00",
-      "icu_sync_date": "2026-04-25T09:42:03.476+00:00",
-      "analyzed": "2026-04-25T09:42:03.476+00:00",
+      "created": "2026-04-29T18:57:14.250+00:00",
+      "icu_sync_date": "2026-04-29T18:57:14.259+00:00",
+      "analyzed": "2026-04-29T18:57:14.259+00:00",
       "icu_w_prime": null,
       "p_max": null,
       "threshold_pace": null,
@@ -1523,7 +1523,7 @@ await make_intervals_request(
   "icu_rpe_path": "split_put_rpe_first",
   "delete_response": {
     "icu_athlete_id": "{athlete_id}",
-    "id": "i142762273"
+    "id": "i144140448"
   },
   "delete_available": true,
   "activity_id_for_manual_cleanup": null
@@ -2085,7 +2085,7 @@ await make_intervals_request(
         "pMax": null
       }
     ],
-    "updated": "2026-04-25T09:42:02.882+00:00",
+    "updated": "2026-04-29T18:57:13.657+00:00",
     "weight": 66.4,
     "restingHR": 51,
     "hrv": null,

@@ -709,7 +709,7 @@ def test_complete_event_provides_date_type_name_and_paired_event_id(
         method: str = "GET",
         data: dict[str, Any] | None = None,
     ) -> Any:
-        if method == "GET" and "/event/" in url and "/events" not in url:
+        if method == "GET" and url.endswith("/events/ev123"):
             counters["event_get"] += 1
             return _make_fake_event("ev123")
         if method == "GET" and url.endswith("/activities"):
@@ -774,7 +774,7 @@ def test_complete_already_paired_refuses(monkeypatch: pytest.MonkeyPatch) -> Non
         method: str = "GET",
         data: dict[str, Any] | None = None,
     ) -> Any:
-        if method == "GET" and "/event/" in url and "/events" not in url:
+        if method == "GET" and url.endswith("/events/ev123"):
             counters["event_get"] += 1
             return _make_fake_event("ev123", paired_event_id="i999")
         if method == "GET" and url.endswith("/activities"):
@@ -819,7 +819,7 @@ def test_complete_duplicate_guard_on_event_date(monkeypatch: pytest.MonkeyPatch)
         method: str = "GET",
         data: dict[str, Any] | None = None,
     ) -> Any:
-        if method == "GET" and "/event/" in url and "/events" not in url:
+        if method == "GET" and url.endswith("/events/ev123"):
             return _make_fake_event("ev123")  # event is valid, not paired
         if method == "GET" and url.endswith("/activities"):
             return [
@@ -868,7 +868,7 @@ def test_complete_paired_event_id_readback_mismatch_errors(
         method: str = "GET",
         data: dict[str, Any] | None = None,
     ) -> Any:
-        if method == "GET" and "/event/" in url and "/events" not in url:
+        if method == "GET" and url.endswith("/events/ev123"):
             return _make_fake_event("ev123")
         if method == "GET" and url.endswith("/activities"):
             return []
@@ -915,7 +915,7 @@ def test_complete_enrichment_fails_after_post_keeps_activity(
         method: str = "GET",
         data: dict[str, Any] | None = None,
     ) -> Any:
-        if method == "GET" and "/event/" in url and "/events" not in url:
+        if method == "GET" and url.endswith("/events/ev123"):
             return _make_fake_event("ev123")
         if method == "GET" and url.endswith("/activities"):
             # On the duplicate-guard call (filtered by oldest=2026-04-27): empty.

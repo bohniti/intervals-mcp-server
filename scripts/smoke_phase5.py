@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 import sys
 from pathlib import Path
@@ -124,9 +125,21 @@ async def main() -> int:  # pylint: disable=too-many-locals,too-many-statements,
         # any custom field is absent. Treat any non-empty missing list as
         # a hard abort.
         if "missing" in verify_lower and "0 missing" not in verify_lower and "no missing" not in verify_lower:
-            failures.append("verify")
-            logger.error("SETUP-01 not satisfied. Aborting subsequent steps. See README 'Climbing setup' section.")
-            return 1
+            if os.environ.get("SMOKE_SKIP_VERIFY") == "1":
+                logger.warning(
+                    "Verify reports missing fields, but SMOKE_SKIP_VERIFY=1 — "
+                    "proceeding. The readback heuristic returns false-negatives "
+                    "when fields are defined in account settings but never "
+                    "populated; subsequent steps will populate them."
+                )
+            else:
+                failures.append("verify")
+                logger.error(
+                    "SETUP-01 not satisfied. Aborting subsequent steps. See "
+                    "README 'Climbing setup' section. Set SMOKE_SKIP_VERIFY=1 "
+                    "to bypass when fields are defined but not yet populated."
+                )
+                return 1
 
         # --- Step 2: write_wellness_entry (D-09 #2) ---
         logger.info("Step 2: write_wellness_entry(date=%s, sleep_hours=8.0, soreness=2)", SMOKE_DATE)
