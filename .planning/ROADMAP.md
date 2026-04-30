@@ -103,7 +103,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 05-02-PLAN.md — README refresh: intro paragraph (D-04) + new `## Climbing tools` section with five subsections (D-03)
 - [x] 05-03-PLAN.md — tests/test_server_registration.py: structural drift gate asserting every milestone tool is registered with FastMCP (D-06/D-08)
 - [x] 05-04-PLAN.md — scripts/smoke_phase5.py + 05-LIVE-SMOKE.md checklist + 05-SMOKE-FINDINGS.md skeleton (D-09/D-10/D-11)
-- [ ] 05-05-PLAN.md — Acceptance gate (Wave 2, non-autonomous): pytest + live smoke run + Claude Desktop checklist drive — confirms SC-1..SC-4
+- [x] 05-05-PLAN.md — Acceptance gate (Wave 2, non-autonomous): pytest + live smoke run + Claude Desktop checklist drive — confirms SC-1..SC-4
 **UI hint**: no
 
 ## Progress
