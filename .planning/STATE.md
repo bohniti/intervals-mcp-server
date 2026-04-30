@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: milestone_complete
-stopped_at: Phase 5 complete — milestone v1.0 functionally complete
-last_updated: "2026-04-30T10:30:00.000Z"
-last_activity: 2026-04-30 -- Phase 05 complete; all 4 success criteria pass; ready for /gsd-complete-milestone
+status: completed
+stopped_at: Phase 5 context gathered
+last_updated: "2026-04-30T09:13:31.572Z"
+last_activity: 2026-04-30
 progress:
   total_phases: 5
-  completed_phases: 6
+  completed_phases: 5
   total_plans: 22
   completed_plans: 22
-  percent: 120
+  percent: 100
 ---
 
 # Project State
@@ -80,9 +80,13 @@ None yet.
 
 ## Deferred Items
 
+Items acknowledged and deferred at milestone close on 2026-04-30:
+
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none)* | | | |
+| uat_gap | Phase 01 — 01-HUMAN-UAT.md | resolved (cosmetic flag, 0 pending scenarios) | 2026-04-30 |
+| uat_gap | Phase 02 — 02-HUMAN-UAT.md | partial (3 pending scenarios) — covered functionally by Phase 5 live smoke | 2026-04-30 |
+| verification_gap | Phase 02 — 02-VERIFICATION.md | human_needed — covered functionally by Phase 5 live smoke | 2026-04-30 |
 
 ## Session Continuity
 
