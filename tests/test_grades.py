@@ -43,14 +43,14 @@ def test_validate_grade_font_on_boulder_ok() -> None:
 
 
 def test_validate_grade_french_on_route_ok() -> None:
-    assert validate_grade("6a+", Discipline.SPORT_LEAD) == "6a+"
-    assert validate_grade("7b", Discipline.TOP_ROPE) == "7b"
-    assert validate_grade("6c", Discipline.TRAD) == "6c"
+    assert validate_grade("6a+", Discipline.SPORT_CLIMBING) == "6a+"
+    assert validate_grade("7b", Discipline.MULTI_PITCH_SPORT) == "7b"
+    assert validate_grade("6c", Discipline.MULTI_PITCH_TRAD) == "6c"
 
 
 def test_validate_grade_font_on_route_rejected() -> None:
     with pytest.raises(ValueError, match="French sport"):
-        validate_grade("6A", Discipline.SPORT_LEAD)
+        validate_grade("6A", Discipline.SPORT_CLIMBING)
 
 
 def test_validate_grade_french_on_boulder_rejected() -> None:

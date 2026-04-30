@@ -213,7 +213,7 @@ async def main() -> int:  # pylint: disable=too-many-locals,too-many-statements,
             logger.info("Step 5b: complete_climbing_session(event_id=%s, ...)", _redact(planned_event_id, athlete_id))
             completion_result = await complete_climbing_session(
                 event_id=planned_event_id,
-                discipline="sport_lead",
+                discipline="sport_climbing",
                 indoor=False,
                 session_focus="projecting",
                 rpe=7,
@@ -228,13 +228,14 @@ async def main() -> int:  # pylint: disable=too-many-locals,too-many-statements,
         status_report = await get_training_status(as_of_date=SMOKE_DATE)
         logger.info("Status report (%d chars):\n%s", len(status_report), _redact(status_report, athlete_id))
         # Token-budget heuristic: ~4 chars per token. STAT-04 / D-12 budget is 400-600 tokens
-        # -> 1600-2400 chars. We assert a slightly wider envelope (1200-2800)
-        # because the smoke run is against far-future fabricated data and
-        # may render shorter than the production-run target. The unit-test
-        # tiktoken assertion in tests/test_status.py is the authoritative
-        # token-budget check; this is a sanity floor.
-        if not (1200 <= len(status_report) <= 2800):
-            logger.warning("Status report length %d chars is outside the 1200-2800 sanity envelope.", len(status_report))
+        # -> 1600-2400 chars upper. Lower bound is intentionally low (200) to
+        # accommodate sparse accounts: a fresh athlete with no recent
+        # activities still produces a structurally-valid 3-section report
+        # under 300 chars. The upper bound (2800) catches runaway/leaky
+        # rendering. The unit-test tiktoken assertion in tests/test_status.py
+        # is the authoritative token-budget check; this is a smoke envelope.
+        if not (200 <= len(status_report) <= 2800):
+            logger.warning("Status report length %d chars is outside the 200-2800 sanity envelope.", len(status_report))
             failures.append("status-length")
         # Three labeled sections must be present (CONTEXT smoke step 6).
         for label in ("## Today", "## This Week", "## Long-Term Trend"):

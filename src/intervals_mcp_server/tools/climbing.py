@@ -16,7 +16,14 @@ from typing import Any
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.tools.activities import add_activity_message  # D-22 — public, allowed
-from intervals_mcp_server.utils.climbing import CUSTOM_FIELD_KEYS, Discipline, SessionFocus
+from intervals_mcp_server.utils.climbing import (
+    CUSTOM_FIELD_KEYS,
+    Discipline,
+    SessionFocus,
+    encode_discipline,
+    encode_indoor,
+    encode_session_focus,
+)
 from intervals_mcp_server.utils.formatting import format_climbing_activity
 from intervals_mcp_server.utils.grades import validate_grade
 from intervals_mcp_server.utils.validation import resolve_athlete_id
@@ -253,22 +260,24 @@ async def _enrich_impl(  # pylint: disable=too-many-arguments,too-many-positiona
             return f"Error: activity {activity_id} not found."
 
     # --- 8. Build supplied pairs (API field name → sent value) --------------
-    # `rpe` maps to API name `icu_rpe`. All other supplied params keep their name.
+    # Intervals.icu uses PascalCase keys for custom fields; selects encode
+    # as ints (Discipline/Indoor/SessionFocus). `rpe` maps to native
+    # `icu_rpe`.
     supplied_pairs: dict[str, Any] = {}
     if discipline is not None:
-        supplied_pairs["discipline"] = discipline
+        supplied_pairs["Discipline"] = encode_discipline(discipline)
     if indoor is not None:
-        supplied_pairs["indoor"] = indoor
+        supplied_pairs["Indoor"] = encode_indoor(indoor)
     if session_focus is not None:
-        supplied_pairs["session_focus"] = session_focus
+        supplied_pairs["SessionFocus"] = encode_session_focus(session_focus)
     if top_grade_sent is not None:
-        supplied_pairs["top_grade_sent"] = top_grade_sent
+        supplied_pairs["TopGradeSent"] = top_grade_sent
     if top_grade_attempted is not None:
-        supplied_pairs["top_grade_attempted"] = top_grade_attempted
+        supplied_pairs["TopGradeAttempted"] = top_grade_attempted
     if sends is not None:
-        supplied_pairs["sends"] = sends
+        supplied_pairs["Sends"] = sends
     if attempts is not None:
-        supplied_pairs["attempts"] = attempts
+        supplied_pairs["Attempts"] = attempts
     if rpe is not None:
         supplied_pairs["icu_rpe"] = rpe
 
@@ -358,15 +367,7 @@ async def _enrich_impl(  # pylint: disable=too-many-arguments,too-many-positiona
         return f"Error: readback failed — activity {activity_id} not found after PUT."
 
     # --- 13/14. Per-field equality (supplied only) + README pointer (D-15) -
-    custom_field_api_names = {
-        "discipline",
-        "indoor",
-        "session_focus",
-        "top_grade_sent",
-        "top_grade_attempted",
-        "sends",
-        "attempts",
-    }
+    custom_field_api_names = set(CUSTOM_FIELD_KEYS.keys())
     mismatches: list[str] = []
     cf_mismatched = False
     for api_name, sent_value in supplied_pairs.items():

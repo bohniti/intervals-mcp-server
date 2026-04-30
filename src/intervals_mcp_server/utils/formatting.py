@@ -575,10 +575,21 @@ def format_climbing_activity(activity: dict[str, Any]) -> str:
     Returns:
         A formatted multi-line string.
     """
-    indoor = activity.get("indoor")
-    if indoor is True:
+    # Decode Intervals.icu int-encoded selects back to human-friendly labels
+    # for display. Unknown values render as the raw int.
+    discipline_labels = {1: "bouldering", 2: "sport_climbing", 3: "multi_pitch_sport", 4: "multi_pitch_trad"}
+    session_focus_labels = {1: "power", 2: "endurance", 3: "technique", 4: "projecting", 5: "mileage"}
+
+    raw_discipline = activity.get("Discipline")
+    discipline_str = discipline_labels.get(raw_discipline, raw_discipline) if raw_discipline is not None else "N/A"
+
+    raw_session_focus = activity.get("SessionFocus")
+    session_focus_str = session_focus_labels.get(raw_session_focus, raw_session_focus) if raw_session_focus is not None else "N/A"
+
+    raw_indoor = activity.get("Indoor")
+    if raw_indoor == 1:
         indoor_str = "Yes"
-    elif indoor is False:
+    elif raw_indoor == 2:
         indoor_str = "No"
     else:
         indoor_str = "N/A"
@@ -591,12 +602,12 @@ def format_climbing_activity(activity: dict[str, Any]) -> str:
         f"  ID: {activity.get('id', 'N/A')}\n"
         f"  Name: {activity.get('name', 'Unnamed')}\n"
         f"  Date: {activity.get('start_date_local', 'Unknown')}\n"
-        f"  Discipline: {activity.get('discipline', 'N/A')}\n"
+        f"  Discipline: {discipline_str}\n"
         f"  Indoor: {indoor_str}\n"
-        f"  Session focus: {activity.get('session_focus', 'N/A')}\n"
-        f"  Top grade sent: {activity.get('top_grade_sent', 'N/A')}\n"
-        f"  Top grade attempted: {activity.get('top_grade_attempted', 'N/A')}\n"
-        f"  Sends: {activity.get('sends', 'N/A')}\n"
-        f"  Attempts: {activity.get('attempts', 'N/A')}\n"
+        f"  Session focus: {session_focus_str}\n"
+        f"  Top grade sent: {activity.get('TopGradeSent', 'N/A')}\n"
+        f"  Top grade attempted: {activity.get('TopGradeAttempted', 'N/A')}\n"
+        f"  Sends: {activity.get('Sends', 'N/A')}\n"
+        f"  Attempts: {activity.get('Attempts', 'N/A')}\n"
         f"  RPE: {rpe_str}\n"
     )

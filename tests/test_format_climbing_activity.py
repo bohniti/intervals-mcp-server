@@ -35,13 +35,13 @@ def test_format_climbing_activity_full_dict_renders_all_fields():
         "id": 42,
         "name": "Spike Session",
         "start_date_local": "2099-01-01T00:00:00",
-        "discipline": "bouldering",
-        "indoor": True,
-        "session_focus": "power",
-        "top_grade_sent": "7A",
-        "top_grade_attempted": "7A+",
-        "sends": 5,
-        "attempts": 8,
+        "Discipline": 1,  # bouldering
+        "Indoor": 1,  # yes
+        "SessionFocus": 1,  # power
+        "TopGradeSent": "7A",
+        "TopGradeAttempted": "7A+",
+        "Sends": 5,
+        "Attempts": 8,
         "icu_rpe": 6,
     }
     out = format_climbing_activity(activity)
@@ -62,15 +62,15 @@ def test_format_climbing_activity_full_dict_renders_all_fields():
 
 
 def test_format_climbing_activity_indoor_false_renders_no():
-    """indoor=False renders as 'Indoor: No' (not 'False')."""
-    out = format_climbing_activity({"indoor": False})
+    """Indoor=2 (the int-Select 'no' value) renders as 'Indoor: No'."""
+    out = format_climbing_activity({"Indoor": 2})
     assert "Indoor: No" in out
     assert "False" not in out
 
 
 def test_format_climbing_activity_indoor_none_renders_na():
-    """indoor=None (explicit) renders as 'Indoor: N/A'."""
-    out = format_climbing_activity({"indoor": None})
+    """Indoor=None (explicit) renders as 'Indoor: N/A'."""
+    out = format_climbing_activity({"Indoor": None})
     assert "Indoor: N/A" in out
 
 

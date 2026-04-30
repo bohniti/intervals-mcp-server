@@ -27,7 +27,11 @@ FONT_RE = re.compile(r"^[3-9][A-C]\+?$|^[12]$")
 FRENCH_SPORT_RE = re.compile(r"^[3-9][abc]\+?$")
 
 
-_ROUTE_DISCIPLINES = frozenset({Discipline.SPORT_LEAD, Discipline.TOP_ROPE, Discipline.TRAD})
+_ROUTE_DISCIPLINES = frozenset({
+    Discipline.SPORT_CLIMBING,
+    Discipline.MULTI_PITCH_SPORT,
+    Discipline.MULTI_PITCH_TRAD,
+})
 
 
 def validate_grade(grade: str, discipline: Discipline) -> str:

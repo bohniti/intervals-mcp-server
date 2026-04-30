@@ -32,32 +32,32 @@ def test_session_focus_values_are_lowercase() -> None:
 
 
 def test_discipline_options_match_custom_field_spec() -> None:
-    spec_options = CUSTOM_FIELD_KEYS["discipline"].options
+    spec_options = CUSTOM_FIELD_KEYS["Discipline"].options
     assert spec_options == tuple(d.value for d in Discipline)
 
 
 def test_session_focus_options_match_custom_field_spec() -> None:
-    spec_options = CUSTOM_FIELD_KEYS["session_focus"].options
+    spec_options = CUSTOM_FIELD_KEYS["SessionFocus"].options
     assert spec_options == tuple(f.value for f in SessionFocus)
 
 
 def test_custom_field_keys_covers_seven_fields() -> None:
     assert set(CUSTOM_FIELD_KEYS.keys()) == {
-        "discipline",
-        "indoor",
-        "session_focus",
-        "top_grade_sent",
-        "top_grade_attempted",
-        "sends",
-        "attempts",
+        "Discipline",
+        "Indoor",
+        "SessionFocus",
+        "TopGradeSent",
+        "TopGradeAttempted",
+        "Sends",
+        "Attempts",
     }
 
 
 def test_custom_field_spec_types_are_valid() -> None:
     for spec in CUSTOM_FIELD_KEYS.values():
         assert isinstance(spec, FieldSpec)
-        assert spec.field_type in {"select", "bool", "text", "integer"}
-        if spec.field_type == "select":
+        assert spec.field_type in {"select", "select_int", "text", "integer"}
+        if spec.field_type in {"select", "select_int"}:
             assert spec.options, f"select field {spec.key} must have options"
         else:
             assert spec.options == (), f"non-select field {spec.key} must not have options"
@@ -159,7 +159,7 @@ def test_verify_custom_fields_setup_all_missing(monkeypatch: pytest.MonkeyPatch)
 def test_verify_custom_fields_setup_some_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     from intervals_mcp_server.tools.climbing import verify_custom_fields_setup
 
-    missing = {"sends", "attempts", "indoor"}
+    missing = {"Sends", "Attempts", "Indoor"}
     sample = _make_fake_missing(missing)
 
     async def fake_request(*_args: object, **_kwargs: object) -> object:
@@ -235,13 +235,13 @@ def test_format_climbing_activity_renders_icu_rpe() -> None:
         "id": "i142495224",
         "name": "Bouldering session",
         "start_date_local": "2099-01-01T00:00:00",
-        "discipline": "bouldering",
-        "indoor": True,
-        "session_focus": "power",
-        "top_grade_sent": "6A+",
-        "top_grade_attempted": "7A",
-        "sends": 4,
-        "attempts": 7,
+        "Discipline": 1,  # bouldering
+        "Indoor": 1,  # yes
+        "SessionFocus": 1,  # power
+        "TopGradeSent": "6A+",
+        "TopGradeAttempted": "7A",
+        "Sends": 4,
+        "Attempts": 7,
         "icu_rpe": 6,
     }
     rendered = format_climbing_activity(fully_populated)
@@ -278,7 +278,7 @@ def test_format_climbing_activity_indoor_false_renders_no() -> None:
     """`indoor: False` must render as 'No', not 'N/A' or 'False'."""
     from intervals_mcp_server.utils.formatting import format_climbing_activity
 
-    rendered = format_climbing_activity({"indoor": False})
+    rendered = format_climbing_activity({"Indoor": 2})  # 2 = no
     assert "Indoor: No" in rendered
 
 
