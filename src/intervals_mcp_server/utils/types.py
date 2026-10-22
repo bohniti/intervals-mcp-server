@@ -7,9 +7,11 @@ Also includes enums for server configuration.
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Any, Union
+from typing import Annotated, List, Dict, Optional, Any, Union
 from enum import Enum, StrEnum
 import json
+
+from pydantic import Field
 
 
 __all__ = [
@@ -217,8 +219,11 @@ class Step:  # pylint: disable=too-many-instance-attributes
 
     text: Optional[str] = None
     text_locale: Optional[Dict[str, str]] = None
-    duration: Optional[int] = None
-    distance: Optional[float] = None
+    duration: Annotated[
+        Optional[int],
+        Field(description="Step duration in SECONDS, not minutes (30 minutes = 1800)"),
+    ] = None
+    distance: Annotated[Optional[float], Field(description="Step distance in meters")] = None
     until_lap_press: Optional[bool] = None
     reps: Optional[int] = None
     warmup: Optional[bool] = None

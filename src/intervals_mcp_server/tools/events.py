@@ -6,19 +6,24 @@ This module contains tools for retrieving, creating, updating, and deleting athl
 
 import json
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import Field
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
 from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
-from intervals_mcp_server.utils.types import WorkoutDoc
+from intervals_mcp_server.utils.types import Step, WorkoutDoc
 from intervals_mcp_server.utils.validation import resolve_athlete_id, validate_date
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
+
+# A planned workout shorter than this is almost always minutes sent as seconds.
+MIN_WORKOUT_SECONDS = 5 * 60
 
 
 def _resolve_workout_type(name: str | None, workout_type: str | None) -> str:
@@ -76,8 +81,61 @@ def _handle_event_response(
     if not result:
         return f"No events {action} for athlete {athlete_id}."
     if isinstance(result, dict):
-        return f"Successfully {action} event id: {result.get('id')}"
+        lines = [f"Successfully {action} event id: {result.get('id')}"]
+        for label, key in (("Name", "name"), ("Date", "start_date_local"), ("Type", "type")):
+            if result.get(key):
+                lines.append(f"{label}: {result[key]}")
+        if result.get("moving_time"):
+            lines.append(f"Duration: {_format_seconds(result['moving_time'])}")
+        if result.get("distance"):
+            lines.append(f"Distance: {result['distance'] / 1000:g} km")
+        return "\n".join(lines)
     return f"Event {action} successfully at {start_date}"
+
+
+def _format_seconds(seconds: int | float) -> str:
+    """Format seconds as e.g. "1h 5m", "45m" or "45s"."""
+    hours, rest = divmod(int(seconds), 3600)
+    minutes, secs = divmod(rest, 60)
+    parts = [f"{hours}h"] if hours else []
+    if minutes:
+        parts.append(f"{minutes}m")
+    if secs or not parts:
+        parts.append(f"{secs}s")
+    return " ".join(parts)
+
+
+def _steps_seconds(steps: list[Step] | None) -> int | None:
+    """Total duration of the steps in seconds, or None if a step is not timed (e.g. by distance)."""
+    total = 0
+    for step in steps or []:
+        if step.steps:
+            inner = _steps_seconds(step.steps)
+            if inner is None:
+                return None
+            total += inner * (step.reps or 1)
+        elif step.duration is not None:
+            total += step.duration
+        elif step.distance is not None or step.until_lap_press:
+            return None
+    return total
+
+
+def _check_duration(moving_time: int | None, workout_doc: WorkoutDoc | None) -> str | None:
+    """Returns an error if the planned duration is so short it was probably given in minutes."""
+    if moving_time and moving_time < MIN_WORKOUT_SECONDS:
+        return (
+            f"Error: moving_time is in seconds, so {moving_time} means {_format_seconds(moving_time)}. "
+            f"For {moving_time} minutes send {moving_time * 60}. Nothing was saved."
+        )
+    if not moving_time and workout_doc is not None and workout_doc.steps:
+        total = _steps_seconds(workout_doc.steps)
+        if total is not None and 0 < total < MIN_WORKOUT_SECONDS:
+            return (
+                f"Error: the steps add up to {_format_seconds(total)}. Step durations are in seconds "
+                f"(45 minutes = 2700). Nothing was saved."
+            )
+    return None
 
 
 async def _delete_events_list(
@@ -285,10 +343,24 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
     athlete_id: str | None = None,
     api_key: str | None = None,
     event_id: str | None = None,
-    start_date: str | None = None,
-    workout_doc: WorkoutDoc | None = None,
-    moving_time: int | None = None,
-    distance: int | None = None,
+    start_date: Annotated[
+        str | None, Field(description="Date in YYYY-MM-DD format; defaults to today")
+    ] = None,
+    workout_doc: Annotated[
+        WorkoutDoc | None,
+        Field(description="Workout steps; every step duration is in SECONDS (45 minutes = 2700)"),
+    ] = None,
+    moving_time: Annotated[
+        int | None,
+        Field(
+            description="Planned total duration in SECONDS, not minutes: 45 minutes = 2700, "
+            "1 hour = 3600",
+            ge=0,
+        ),
+    ] = None,
+    distance: Annotated[
+        int | None, Field(description="Planned total distance in METERS: 10 km = 10000", ge=0)
+    ] = None,
 ) -> str:
     """Post event for an athlete to Intervals.icu this follows the event api from intervals.icu
     If event_id is provided, the event will be updated instead of created.
@@ -303,8 +375,11 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         name: Name of the activity
         workout_doc: steps as a list of Step objects (optional, but necessary to define workout steps)
         workout_type: Workout type (e.g. Ride, Run, Swim, Walk, Row)
-        moving_time: Total expected moving time of the workout in seconds (optional)
+        moving_time: Total expected moving time of the workout in SECONDS, not minutes (optional;
+            45 minutes = 2700). Values under 5 minutes are refused as a likely unit mix-up.
         distance: Total expected distance of the workout in meters (optional)
+
+    The reply repeats the saved name, date, type, duration and distance: check them.
 
     Example:
         "workout_doc": {
@@ -323,7 +398,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
     Step properties:
         distance: Distance of step in meters
             {"distance": 5000}
-        duration: Duration of step in seconds
+        duration: Duration of step in SECONDS, not minutes (30 minutes = 1800)
             {"duration": 1800}
         power/hr/pace/cadence: Define step intensity
             Percentage of FTP: {"power": {"value": 80, "units": "%ftp"}}
@@ -361,6 +436,10 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
 
     if not start_date:
         start_date = datetime.now().strftime("%Y-%m-%d")
+
+    duration_error = _check_duration(moving_time, workout_doc)
+    if duration_error:
+        return duration_error
 
     try:
         event_data = _prepare_event_data(

@@ -42,6 +42,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     update_custom_item,
     delete_custom_item,
 )
+from intervals_mcp_server.mcp_instance import mcp  # pylint: disable=wrong-import-position
 from tests.sample_data import INTERVALS_DATA  # pylint: disable=wrong-import-position
 
 
@@ -318,6 +319,76 @@ def test_add_or_update_event(monkeypatch):
     )
     assert "Successfully created event id:" in result
     assert "e123" in result
+
+
+def test_add_or_update_event_echoes_saved_values(monkeypatch):
+    """The reply repeats what Intervals.icu saved, so a wrong unit is visible."""
+
+    async def fake_post_request(*_args, **_kwargs):
+        return {
+            "id": "e1",
+            "name": "Gym",
+            "start_date_local": "2024-01-19T00:00:00",
+            "type": "WeightTraining",
+            "moving_time": 2700,
+            "distance": 10500,
+        }
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_post_request
+    )
+    result = asyncio.run(
+        add_or_update_event(name="Gym", workout_type="WeightTraining", moving_time=2700)
+    )
+    assert "Duration: 45m" in result
+    assert "Distance: 10.5 km" in result
+    assert "Date: 2024-01-19T00:00:00" in result
+
+
+def test_add_or_update_event_refuses_minutes_as_seconds(monkeypatch):
+    """A moving_time or step total under 5 minutes is refused before anything is sent."""
+
+    async def fail_request(*_args, **_kwargs):
+        raise AssertionError("nothing should be sent")
+
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fail_request)
+    result = asyncio.run(
+        add_or_update_event(name="Gym", workout_type="WeightTraining", moving_time=45)
+    )
+    assert "send 2700" in result and "Nothing was saved" in result
+
+    # Through the MCP layer, as a client sends it: steps in a workout_doc.
+    result = asyncio.run(
+        mcp.call_tool(
+            "add_or_update_event",
+            {
+                "name": "Gym",
+                "workout_type": "WeightTraining",
+                "workout_doc": {
+                    "steps": [{"duration": 15}, {"reps": 2, "steps": [{"duration": 15}]}]
+                },
+            },
+        )
+    )
+    assert "the steps add up to 45s" in str(result)
+
+
+def test_add_or_update_event_allows_untimed_steps(monkeypatch):
+    """Steps by distance cannot be checked, so they go through."""
+
+    async def fake_post_request(*_args, **_kwargs):
+        return {"id": "e2"}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_post_request
+    )
+    result = asyncio.run(
+        mcp.call_tool(
+            "add_or_update_event",
+            {"name": "Run", "workout_type": "Run", "workout_doc": {"steps": [{"distance": 5000}]}},
+        )
+    )
+    assert "e2" in str(result)
 
 
 def test_get_activity_messages(monkeypatch):
